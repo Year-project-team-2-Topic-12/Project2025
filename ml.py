@@ -1,4 +1,5 @@
 import pickle
+from IPython.display import display
 from sklearn.metrics import accuracy_score, f1_score, cohen_kappa_score
 import os
 import glob
@@ -6,6 +7,10 @@ import numpy as np
 from skimage import io
 from skimage.feature import hog
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.model_selection import GridSearchCV
+from sklearn.pipeline import Pipeline
+import time
+import pandas as pd
 
 def save_model_data(model, name):
     with open(name, "wb") as f:
@@ -30,6 +35,9 @@ def print_metrics(y_train, y_pred_train, y_val, y_pred_val):
     print(f"VALID METRICS: Accuracy={acc:.3f}, F1_Abnormal={f1:.3f}, Cohen_Kappa={kappa:.3f}")
     valid_data = {'accuracy': acc, 'f1': f1, 'kappa': kappa}
     return {'train': train_data, 'valid': valid_data}
+
+def get_hog_anatomy_filename(anatomy):
+    return f"hog_{anatomy}.npz"
 
 def compute_study_hog(df_subset, as_gray=True):
         print('updated 1')
@@ -166,3 +174,80 @@ class ImageLoader(BaseEstimator, TransformerMixin):
             for path in X
         ]
         return np.array(imgs)
+
+
+def fit_hog_pipeline_bodyparts(pipe_bodypart: Pipeline, param_grid: dict, model_name_base: str, base_df: pd.DataFrame, use_all=False):
+    resulting_data = {
+        'anatomy': [],
+        'train_kappa': [],
+        'valid_kappa': [],
+        'train_accuracy': [],
+        'valid_accuracy': [],
+        'train_f1': [],
+        'valid_f1': [],
+        'best_params': [],
+        'fit_time_seconds': []
+    }
+    models = []
+
+    def train_model_for_bodypart(body_part: str, data):
+        print(f"\nОбработка анатомии: {body_part}")
+        X = data['X']
+        y = data['y']
+        splits = data['splits']
+
+        X_train = X[np.array(splits) == 'train']
+        y_train = y[np.array(splits) == 'train']
+        X_val = X[np.array(splits) == 'val']
+        y_val = y[np.array(splits) == 'val']
+
+        grid_search = GridSearchCV(pipe_bodypart, param_grid, scoring='f1', cv=5, n_jobs=-1)
+        start_time = time.time()
+        grid_search.fit(X_train, y_train)
+        fit_time = time.time() - start_time
+
+        best_model = grid_search.best_estimator_
+
+        y_pred_train = best_model.predict(X_train)
+        y_pred_val = best_model.predict(X_val)
+
+        metrics = print_metrics(y_train, y_pred_train, y_val, y_pred_val)
+
+        resulting_data['anatomy'].append(body_part)
+        resulting_data['train_kappa'].append(metrics['train']['kappa'])
+        resulting_data['valid_kappa'].append(metrics['valid']['kappa'])
+        resulting_data['train_accuracy'].append(metrics['train']['accuracy'])
+        resulting_data['valid_accuracy'].append(metrics['valid']['accuracy'])
+        resulting_data['train_f1'].append(metrics['train']['f1'])
+        resulting_data['valid_f1'].append(metrics['valid']['f1'])
+        resulting_data['best_params'].append(grid_search.best_params_)
+        resulting_data['fit_time_seconds'].append(fit_time)
+        models.append((body_part, best_model))
+
+    print(f"Обучаем модель {model_name_base} по всему датасету")
+    if use_all:
+        X_list, y_list, splits_list = [], [], []
+
+        for body_part in base_df['anatomy'].unique():
+            d = np.load(get_hog_anatomy_filename(body_part), allow_pickle=True)
+            X_list.append(d["X"])
+            y_list.append(d["y"])
+            splits_list.append(d["splits"])
+
+        data_all = {
+            "X": np.vstack(X_list),
+            "y": np.concatenate(y_list),
+            "splits": np.concatenate(splits_list),
+        }
+        print("Any empty X?", any(x.shape[0] == 0 for x in X_list))
+        print("Unique splits:", set(np.concatenate(splits_list)))
+        train_model_for_bodypart("ALL_anatomies", data_all)
+    else: 
+        for body_part in base_df['anatomy'].unique():
+            print("\nОбработка анатомии:", body_part)
+            data = np.load(get_hog_anatomy_filename(body_part), allow_pickle=True)
+            train_model_for_bodypart(body_part, data)
+        
+    print(f"Обучаем модель {model_name_base} по анатомиям")
+
+    return resulting_data, models
