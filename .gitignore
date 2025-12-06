@@ -212,3 +212,4 @@ MURA-enhanced*
 *.pkl
 *.npz
 backups/
+models/

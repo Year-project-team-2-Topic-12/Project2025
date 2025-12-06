@@ -23,7 +23,7 @@ def extract_intensity_features_from_study(study_path):
         'p10': np.percentile(flat, 10)
     }
 
-def prepare_data_for_anatomy(paths_df: pd.DataFrame, anatomy, get_all=False, extract_func=extract_intensity_features_from_study):
+def prepare_data_for_anatomy(paths_df: pd.DataFrame, anatomy: str | None = None, get_all=False, extract_func=extract_intensity_features_from_study):
     train_df = paths_df[paths_df['split'] == 'train']
     valid_df = paths_df[paths_df['split'] == 'valid']
     if not get_all:

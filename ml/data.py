@@ -6,22 +6,60 @@ import numpy as np
 from skimage import io
 from sklearn.base import BaseEstimator, TransformerMixin
 import pandas as pd
+from sklearn.model_selection import GridSearchCV
 
 
-def save_model_data(model, name):
-    filepath = Path('models') / Path(name)
-    filepath.parent.mkdir(parents=True, exist_ok=True)
+PATH_MODELS = Path('models')
+PATH_MODELS.mkdir(parents=True, exist_ok=True)
+
+def get_anatomy_suffix(anatomy: str | None = None) -> str:
+    if anatomy is None:
+        return "_all"
+    return f"_{anatomy}"
+
+def get_results_fname(model_name_base: str) -> str:
+    return f"results_{model_name_base}.csv"
+
+def get_model_fname(model_name_base: str, anatomy: str | None = None) -> str:
+    return f"model_{model_name_base}{get_anatomy_suffix(anatomy)}.pkl"
+
+def get_models_path(model_fname: str) -> Path:
+    path = PATH_MODELS / Path(model_fname)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+def save_model_data(model, model_name_base: str, anatomy: str | None = None):
+    model_fname = get_model_fname(model_name_base, anatomy)
+    filepath = get_models_path(model_fname)
+    print(f"Сохранение модели в {filepath}")
     with open(filepath, "wb") as f:
         pickle.dump(model, f)
 
-def load_model_data(name):
+def load_model_data(model_name_base: str, anatomy: str | None = None):
     try:
-        filepath = Path('models') / Path(name)
-        filepath.parent.mkdir(parents=True, exist_ok=True)
+        model_fname = get_model_fname(model_name_base, anatomy)
+        filepath = get_models_path(model_fname)
         with open(filepath, "rb") as f:
+            print(f"Загрузка модели из {filepath}")
             return pickle.load(f)
     except FileNotFoundError:
-        print(f"File {name} not found.")
+        print(f"Файл {model_fname} не найден.")
+        return None
+    
+def save_model_results(results: pd.DataFrame, model_name_base: str) -> GridSearchCV:
+    results_fname = get_results_fname(model_name_base)
+    filepath = get_models_path(results_fname)
+    print(f"Сохранение результатов в {filepath}")
+    results.to_csv(filepath, index=False)
+
+def load_model_results(model_name_base: str) -> pd.DataFrame | None:
+    results_fname = get_results_fname(model_name_base)
+    filepath = get_models_path(results_fname)
+    try:
+        print(f"Загрузка результатов из {filepath}")
+        return pd.read_csv(filepath)
+    except FileNotFoundError:
+        print(f"Файл {results_fname} не найден.")
         return None
 
 class ImageLoader(BaseEstimator, TransformerMixin):
@@ -73,5 +111,3 @@ def build_dataframe(root_dir: str):
                     if os.path.isdir(study_path):
                         records.append(parse_study_path(study_path))
     return pd.DataFrame(records)
-
-

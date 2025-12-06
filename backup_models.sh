@@ -4,6 +4,6 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_DIR="backups"
 ARCHIVE_NAME="models_backup_$TIMESTAMP.tar.gz"
 mkdir -p $BACKUP_DIR
-tar -czf $BACKUP_DIR/$ARCHIVE_NAME *.pkl *.npz *.csv *.pickle
-rm -f *.pkl *.csv *.pickle *.npz
+tar -czf $BACKUP_DIR/$ARCHIVE_NAME ./models/*.pkl ./models/*.npz ./models/*.csv ./models/*.pickle
+rm -f ./models/*.pkl ./models/*.csv ./models/*.pickle ./models/*.npz
 echo "Backup created at $BACKUP_DIR/$ARCHIVE_NAME and original files removed."
