@@ -9,12 +9,16 @@ import pandas as pd
 
 
 def save_model_data(model, name):
-    with open(name, "wb") as f:
+    filepath = Path('models') / Path(name)
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    with open(filepath, "wb") as f:
         pickle.dump(model, f)
 
 def load_model_data(name):
     try:
-        with open(name, "rb") as f:
+        filepath = Path('models') / Path(name)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        with open(filepath, "rb") as f:
             return pickle.load(f)
     except FileNotFoundError:
         print(f"File {name} not found.")
