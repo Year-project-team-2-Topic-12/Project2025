@@ -2,7 +2,7 @@ import numpy as np
 from skimage import io
 from skimage.feature import hog
 import pandas as pd
-
+from data import get_data_path
 
 import glob
 import os
@@ -131,7 +131,10 @@ class StudyHOGTransformer(BaseEstimator, TransformerMixin):
             feats.append(self._hog_for_study(study_dir))
         return np.vstack(feats)
     
-
+"""
+Функция для использования в fit_pipeline_anatomies.
+Подготавливает данные для не-xgboost моделей на HOG.
+"""
 def prepare_data_for_anatomy(base_df: pd.DataFrame, anatomy, get_all=False):
         if get_all:
             X_list, y_list, splits_list = [], [], []

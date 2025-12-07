@@ -1,5 +1,5 @@
 from sklearn.metrics import accuracy_score, cohen_kappa_score, f1_score, make_scorer, roc_auc_score
-from ml.data import load_model_data, save_model_data, load_model_results, save_model_results
+from ml.data import load_model_pipeline, load_model_results, save_model_pipeline, save_model_results
 from typing import Protocol
 import numpy as np
 import pandas as pd
@@ -66,8 +66,10 @@ def fit_pipeline_anatomies(
 
     def train_model_for_anatomy(X_train: np.array, y_train: np.array, X_val: np.array, y_val: np.array, anatomy: str | None = None):
         print(f"\nОбработка анатомии: {anatomy if anatomy else 'ALL'}")
-
-        if not(grid_search := load_model_data(model_name_base, anatomy=anatomy)):
+        print(anatomy, X_train.shape, X_val.shape)
+        print(X_train.index[:10])
+        print(X_val.index[:10])
+        if not(grid_search := load_model_pipeline(model_name_base, anatomy=anatomy)):
             print(f"Нет сохранённой - обучаем модель {model_name_base} для анатомии {anatomy}")
             print("len X_train:", len(X_train))
             print("len X_val:", len(X_val))
@@ -78,7 +80,7 @@ def fit_pipeline_anatomies(
             start_time = time.time()
             grid_search.fit(X_train, y_train)
             fit_time = time.time() - start_time
-            save_model_data(grid_search, model_name_base, anatomy=anatomy)
+            save_model_pipeline(grid_search, model_name_base, anatomy=anatomy)
             print("Время обучения grid search (сек):", fit_time)
         best_model = grid_search.best_estimator_
         print("Best params:", grid_search.best_params_)
