@@ -3,6 +3,8 @@
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_DIR="backups"
 archives=()
+# get arguments if need to backup everything or specific parts
+
 
 ARCHIVE_NAME="models_backup_$TIMESTAMP.tar.gz"
 mkdir -p $BACKUP_DIR
