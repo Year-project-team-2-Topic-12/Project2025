@@ -40,7 +40,7 @@ def fit_pipeline_anatomies(
         use_all=False,
         use_decision_function=True,
         get_data_for_anatomy: GetDataFunction | None = None,
-        anatomy: str | None = None,
+        only_anatomy: str | None = None,
         ):
 
     resulting_data = {
@@ -59,16 +59,13 @@ def fit_pipeline_anatomies(
         'fit_time_std': [],
     }
     # models = []
-    results_df = load_model_results(model_name_base)
+    results_df = load_model_results(model_name_base, use_all=use_all)
     if results_df is not None:
         print(f"Загружены результаты модели {model_name_base} из файла.")
         return results_df
 
     def train_model_for_anatomy(X_train: np.array, y_train: np.array, X_val: np.array, y_val: np.array, anatomy: str | None = None):
         print(f"\nОбработка анатомии: {anatomy if anatomy else 'ALL'}")
-        print(anatomy, X_train.shape, X_val.shape)
-        print(X_train.index[:10])
-        print(X_val.index[:10])
         if not(grid_search := load_model_pipeline(model_name_base, anatomy=anatomy)):
             print(f"Нет сохранённой - обучаем модель {model_name_base} для анатомии {anatomy}")
             print("len X_train:", len(X_train))
@@ -82,6 +79,8 @@ def fit_pipeline_anatomies(
             fit_time = time.time() - start_time
             save_model_pipeline(grid_search, model_name_base, anatomy=anatomy)
             print("Время обучения grid search (сек):", fit_time)
+        else:
+            print(f"Загружена сохранённая модель {model_name_base} для анатомии {anatomy}")
         best_model = grid_search.best_estimator_
         print("Best params:", grid_search.best_params_)
         best_idx = grid_search.best_index_
@@ -127,14 +126,14 @@ def fit_pipeline_anatomies(
     else:
         print(f"Обучаем модель {model_name_base} по анатомиям")
         for anatomy in paths_df['anatomy'].unique():
-            if anatomy and anatomy != anatomy:
+            if only_anatomy and anatomy != only_anatomy:
                 continue
             print(f"Обучаем модель по анатомии {anatomy}")
             X_train, y_train, X_val, y_val = get_data_for_anatomy(paths_df, anatomy)
             train_model_for_anatomy(X_train, y_train, X_val, y_val, anatomy=anatomy)
 
     results_df =  pd.DataFrame(resulting_data)
-    save_model_results(results_df, model_name_base)
+    save_model_results(results_df, model_name_base, use_all=use_all)
     return results_df
 
 

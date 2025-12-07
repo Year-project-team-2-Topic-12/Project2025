@@ -28,7 +28,7 @@ def prepare_data_for_anatomy(paths_df: pd.DataFrame, anatomy: str | None = None,
     valid_df = paths_df[paths_df['split'] == 'valid']
     if not get_all:
         train_df = train_df[train_df['anatomy'] == anatomy]
-        val_df = valid_df[valid_df['anatomy'] == anatomy]
+        valid_df = valid_df[valid_df['anatomy'] == anatomy]
     # Извлечение признаков
     X_train_list, y_train_list = [], []
     for _, row in train_df.iterrows():
@@ -40,7 +40,7 @@ def prepare_data_for_anatomy(paths_df: pd.DataFrame, anatomy: str | None = None,
             continue
 
     X_val_list, y_val_list = [], []
-    for _, row in val_df.iterrows():
+    for _, row in valid_df.iterrows():
         try:
             feats = extract_func(row['path'])
             X_val_list.append(feats)

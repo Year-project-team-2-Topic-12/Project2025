@@ -8,19 +8,19 @@ ARCHIVE_NAME="models_backup_$TIMESTAMP.tar.gz"
 mkdir -p $BACKUP_DIR
 tar -czf $BACKUP_DIR/$ARCHIVE_NAME ./models/*
 archives+=("$BACKUP_DIR/$ARCHIVE_NAME")
-rm -f ./models/*
+# rm -f ./models/*
 
 ARCHIVE_NAME="results_backup_$TIMESTAMP.tar.gz"
 mkdir -p $BACKUP_DIR
 tar -czf $BACKUP_DIR/$ARCHIVE_NAME ./results/*
 archives+=("$BACKUP_DIR/$ARCHIVE_NAME")
-rm -f ./results/*
+# rm -f ./results/*
 
 ARCHIVE_NAME="data_backup_$TIMESTAMP.tar.gz"
 mkdir -p $BACKUP_DIR
 tar -czf $BACKUP_DIR/$ARCHIVE_NAME ./data/*
 archives+=("$BACKUP_DIR/$ARCHIVE_NAME")
-rm -f ./data/*
+# rm -f ./data/*
 
 echo "Backup completed. Created archives:"
 printf '%s\n' "${archives[@]}"

@@ -16,8 +16,9 @@ def get_anatomy_suffix(anatomy: str | None = None) -> str:
         return "_all"
     return f"_{anatomy}"
 
-def get_results_fname(model_name_base: str) -> str:
-    return f"results_{model_name_base}.csv"
+def get_results_fname(model_name_base: str, use_all: bool) -> str:
+    suffix = "_all" if use_all else ""
+    return f"results_{model_name_base}{suffix}.csv"
 
 def get_model_fname(model_name_base: str, anatomy: str | None = None) -> str:
     return f"model_{model_name_base}{get_anatomy_suffix(anatomy)}.pkl"
@@ -61,17 +62,18 @@ def save_model_pipeline(model, model_name_base: str, anatomy: str | None = None)
 def load_model_pipeline(model_name_base: str, anatomy: str | None = None):
     model_fname = get_model_fname(model_name_base, anatomy)
     filepath = get_models_path(model_fname)
+    print("load model pipeline:", model_fname, filepath)
     print(f"Загрузка модели из {filepath}")
     return load_pickle(filepath)
 
-def save_model_results(results: pd.DataFrame, model_name_base: str) -> GridSearchCV:
-    results_fname = get_results_fname(model_name_base)
+def save_model_results(results: pd.DataFrame, model_name_base: str, use_all: bool) -> GridSearchCV:
+    results_fname = get_results_fname(model_name_base, use_all)
     filepath = get_results_path(results_fname)
     print(f"Сохранение результатов в {filepath}")
     results.to_csv(filepath, index=False)
 
-def load_model_results(model_name_base: str) -> pd.DataFrame | None:
-    results_fname = get_results_fname(model_name_base)
+def load_model_results(model_name_base: str, use_all: bool) -> pd.DataFrame | None:
+    results_fname = get_results_fname(model_name_base, use_all=use_all)
     filepath = get_results_path(results_fname)
     try:
         print(f"Загрузка результатов из {filepath}")
@@ -137,12 +139,11 @@ def build_dataframe(root_dir: str = DATA_ROOT, return_images=False):
     records = []
     print("Загружаем датафрейм с данными из корня:", root_dir)
     for split in ['train', 'valid']:
-        print("Обработка сплита:", split)
         split_path = os.path.join(root_dir, split)
         if not os.path.isdir(split_path):
             continue
         anatomies_paths = os.listdir(split_path)
-        for _idx, anatomy in tqdm(enumerate(anatomies_paths), total=len(anatomies_paths),  desc=f"Анатомии {split}"):
+        for _idx, anatomy in tqdm(enumerate(anatomies_paths), total=len(anatomies_paths),  desc=f"Обработка анатомий в {split}"):
             anatomy_path = os.path.join(split_path, anatomy)
             if not os.path.isdir(anatomy_path):
                 continue
