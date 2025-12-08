@@ -50,3 +50,20 @@
 
 ---
 
+
+## 🔌 Инструкция по [локальному] запуску
+1. Установить [pyenv](https://github.com/pyenv/pyenv) | [pyenv-win](https://github.com/pyenv-win/pyenv-win)
+2. Установить зависимости, например
+   - Внутри virtual environment:
+  ```bash
+  pyenv install 3.13
+  pyenv shell 3.13
+  python -m venv .venv
+  source .venv/bin/activate  # Windows: .venv\Scripts\activate
+  pip install -r requirements.txt
+  jupyter lab
+  # или
+  # jupyter server
+```
+  - Можно просто глобально: ``pip install -r requirements.txt``
+  - Открыть ML.ipynb
