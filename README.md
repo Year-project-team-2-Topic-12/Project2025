@@ -6,6 +6,7 @@
 - Механизм Alembic-митаций для управления структурой БД
 
 Структура:
+```text
 persistence/
 ├── main.py            # точка входа в приложение
 ├── models.py          # модель таблицы RequestLog
@@ -18,7 +19,7 @@ persistence/
 ├── request_logs.db    # SQLite база данных (создается автоматически)
 ├── requirements.txt   # зависимости
 ├── alembic.ini        # настройки Alembic
-
+```
 
 
 Тестирование:
