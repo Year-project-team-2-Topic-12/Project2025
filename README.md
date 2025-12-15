@@ -1,11 +1,12 @@
-Реализовано:
+**Реализовано:**
 
 - Сохранение каждого запроса к API (например, /forward) в базу данных
 - Возможность просматривать историю запросов через GET `/history`
 - Возможность удалить всю историю через DELETE `/history` (с авторизацией)
 - Механизм Alembic-митаций для управления структурой БД
 
-Структура:
+
+**Структура:**
 ```text
 persistence/
 ├── main.py            # точка входа в приложение
@@ -22,40 +23,44 @@ persistence/
 ```
 
 
-Тестирование:
+**Тестирование:**
 * Создать виртуальное окружение и установить requirements
+```text
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+```
 
 * Применить миграции Alembic, создаст файл базы данных history.db и таблицу request_logs
+```text
 alembic upgrade head
+```
 
 * Запуск приложения (URL http://127.0.0.1:8000/docs)
+```text
 uvicorn main:app --reload
-
-
-
-GET /history возвращает список сохраненных логов, при запуске создается тестовый лог для проверки 
-
-DELETE /history удаляет все записи из базы, требуется авторизация (верхний правый угол, пароль для тестов secret_token)
-
-
-
-Alembic:
-При внесении изменений в models.py позволяет обновить структуру базы данных одной командой 
-* Создание новой миграции 
-alembic revision --autogenerate -m "change message"
-* Применение новой миграции
-alembic upgrade head
-
+```
 
 Логи сохраняются в history.db
 
+**GET /history** возвращает список сохраненных логов, при запуске создается тестовый лог для проверки  
+**DELETE /history** удаляет все записи из базы, требуется авторизация (верхний правый угол, пароль для тестов secret_token)  
+
+
+**Alembic:**
+При внесении изменений в models.py позволяет обновить структуру базы данных одной командой 
+* Создание новой миграции
+```text
+alembic revision --autogenerate -m "change message"
+```
+* Применение новой миграции
+```text
+alembic upgrade head
+```
 
 
 Пример использования в POST /forward:
-
+```text
 from fastapi import APIRouter, UploadFile, HTTPException
 from sqlalchemy.orm import Session
 from database import engine
@@ -85,3 +90,4 @@ async def forward(image: UploadFile):
         add_log(session, log_data)
 
     return {"result": result}
+```
