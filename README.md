@@ -7,17 +7,18 @@
 
 Структура:
 persistence/
-├── main.py # точка входа в приложение
-├── models.py # модель таблицы RequestLog
-├── crud.py # логика сохранения и чтения логов
-├── database.py # подключение к SQLite через SQLAlchemy
+├── main.py            # точка входа в приложение
+├── models.py          # модель таблицы RequestLog
+├── crud.py            # логика сохранения и чтения логов
+├── database.py        # подключение к SQLite через SQLAlchemy
 ├── routers/
-│ └── history.py # маршруты /history (GET и DELETE)
-├── alembic/ # миграции alembic
-│ └── versions/ # автосозданные версии
-├── request_logs.db # SQLite база данных (создается автоматически)
-├── requirements.txt # зависимости
-├── alembic.ini # настройки Alembic
+│   └── history.py     # маршруты /history (GET и DELETE)
+├── alembic/
+│   └── versions/      # автосозданные версии
+├── request_logs.db    # SQLite база данных (создается автоматически)
+├── requirements.txt   # зависимости
+├── alembic.ini        # настройки Alembic
+
 
 
 Тестирование:
