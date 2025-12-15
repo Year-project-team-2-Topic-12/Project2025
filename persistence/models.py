@@ -12,7 +12,6 @@ class RequestLog(Base):
 
     id = Column(Integer, primary_key=True, index=True) # уникальный id для каждой записи
     timestamp = Column(DateTime, default=datetime.utcnow) # дата и время запроса
-    request_type = Column(String) #
     input_meta = Column(String) # что пришло в запросе
     duration = Column(Float) # сколько времени заняло
     result = Column(String) #

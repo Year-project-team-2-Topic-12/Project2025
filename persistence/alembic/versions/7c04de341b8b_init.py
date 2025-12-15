@@ -1,8 +1,8 @@
-"""create request_logs table
+"""init
 
-Revision ID: 4c330484ad7b
+Revision ID: 7c04de341b8b
 Revises: 
-Create Date: 2025-12-15 13:30:27.299695
+Create Date: 2025-12-15 17:02:02.809540
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '4c330484ad7b'
+revision: str = '7c04de341b8b'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -24,7 +24,6 @@ def upgrade() -> None:
     op.create_table('request_logs',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('timestamp', sa.DateTime(), nullable=True),
-    sa.Column('request_type', sa.String(), nullable=True),
     sa.Column('input_meta', sa.String(), nullable=True),
     sa.Column('duration', sa.Float(), nullable=True),
     sa.Column('result', sa.String(), nullable=True),

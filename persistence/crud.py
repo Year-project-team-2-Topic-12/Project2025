@@ -19,7 +19,6 @@ def add_log(session: Session, log_data: dict):
 
 def add_test_log(session):
     new_log = RequestLog(
-        request_type="test",
         input_meta="тестовые данные",
         duration=0.1,
         result="успех",

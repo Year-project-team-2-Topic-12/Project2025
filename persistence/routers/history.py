@@ -15,7 +15,6 @@ def read_history():
         {
             "id": log.id,
             "timestamp": log.timestamp,
-            "request_type": log.request_type,
             "input_meta" : log.input_meta,
             "duration": log.duration,
             "result": log.result,
