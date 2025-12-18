@@ -16,3 +16,10 @@ class RequestLog(Base):
     duration = Column(Float) # сколько времени заняло
     result = Column(String) #
     status = Column(Integer) # HTTP код ответа
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    role = Column(String, default="user") # 'admin' или 'user'
