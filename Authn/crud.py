@@ -26,3 +26,15 @@ def add_test_log(session):
     )
     session.add(new_log)
     session.commit()
+
+def get_user_by_username(session: Session, username: str):
+    """Поиск пользователя по имени для проверки пароля"""
+    return session.query(User).filter(User.username == username).first()
+
+def create_user(session: Session, username: str, password_hash: str, role: str = "user"):
+    """Создание нового пользователя (для скрипта create_admin.py)"""
+    db_user = User(username=username, hashed_password=password_hash, role=role)
+    session.add(db_user)
+    session.commit()
+    session.refresh(db_user)
+    return db_user
