@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routers import history
+from routers import history, stats
 
 app = FastAPI(
     title="MURA Classifier API",
@@ -8,6 +8,7 @@ app = FastAPI(
 )
 
 app.include_router(history.router)
+app.include_router(stats.router)
 
 
 # для тестовой записи логов при запуске
