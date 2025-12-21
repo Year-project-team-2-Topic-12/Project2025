@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from backend.routers history, inference, stats
+from backend.routers import history, inference, stats
 
 app = FastAPI(
     title="MURA Classifier API",

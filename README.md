@@ -58,6 +58,6 @@
   ```bash
   pyenv install 3.13.7
   puenv shell 3.13.7
-  source botstrap.sh
+  ./botstrap.sh
 ```
-  - Открыть ML.ipynb
+  - Открыть ML.ipynb (если нужно)
