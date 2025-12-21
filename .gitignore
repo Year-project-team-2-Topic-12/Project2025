@@ -214,3 +214,4 @@ MURA-enhanced*
 backups/
 models/
 .vite/
+*.db
