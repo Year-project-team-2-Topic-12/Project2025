@@ -19,7 +19,7 @@ if config.config_file_name is not None:
 import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from models import Base  # noqa
+from backend.models import Base  # noqa
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,

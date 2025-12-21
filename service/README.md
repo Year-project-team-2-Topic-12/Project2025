@@ -28,7 +28,8 @@ persistence/
 **Тестирование:**
 * Создать виртуальное окружение и установить requirements
 ```text
-python3 -m venv venv
+pyenv shell 3.13.7
+python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```

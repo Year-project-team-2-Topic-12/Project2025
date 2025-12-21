@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from models import RequestLog
+from backend.models import RequestLog
 from sqlalchemy import select
 from datetime import datetime, timezone
 

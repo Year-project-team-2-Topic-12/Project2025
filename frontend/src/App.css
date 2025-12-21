@@ -1,0 +1,22 @@
+.container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.upload-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: center;
+}
+
+.result-block {
+  margin-top: 2rem;
+  text-align: left;
+  background: #f4f4f4;
+  padding: 1rem;
+  border-radius: 8px;
+  color: #333;
+}

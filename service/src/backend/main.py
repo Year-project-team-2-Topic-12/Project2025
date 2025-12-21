@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routers import history, stats
+from backend.routers history, inference, stats
 
 app = FastAPI(
     title="MURA Classifier API",
@@ -9,12 +9,12 @@ app = FastAPI(
 
 app.include_router(history.router)
 app.include_router(stats.router)
-
+app.include_router(inference.router)
 
 # для тестовой записи логов при запуске
-from database import engine
+from backend.database import engine
 from sqlalchemy.orm import Session as OrmSession
-import crud
+from backend import crud
 
 with OrmSession(engine) as session:
     crud.add_test_log(session)

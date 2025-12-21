@@ -56,14 +56,8 @@
 2. Установить зависимости, например
    - Внутри virtual environment:
   ```bash
-  pyenv install 3.13
-  pyenv shell 3.13
-  python -m venv .venv
-  source .venv/bin/activate  # Windows: .venv\Scripts\activate
-  pip install -r requirements.txt
-  jupyter lab
-  # или
-  # jupyter server
+  pyenv install 3.13.7
+  puenv shell 3.13.7
+  source botstrap.sh
 ```
-  - Можно просто глобально: ``pip install -r requirements.txt``
   - Открыть ML.ipynb
