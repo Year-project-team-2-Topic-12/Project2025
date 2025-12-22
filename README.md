@@ -57,7 +57,8 @@
    - Внутри virtual environment:
   ```bash
   pyenv install 3.13.7
-  puenv shell 3.13.7
-  ./botstrap.sh
+  pyenv shell 3.13.7
+  ./bootstrap.sh
 ```
+Для установки зависимости выберете пункт 
   - Открыть ML.ipynb (если нужно)

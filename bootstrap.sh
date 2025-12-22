@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# All of this file is ai-asssited
+# All of this file is ai-assisted
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
