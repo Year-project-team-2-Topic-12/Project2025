@@ -19,7 +19,7 @@ persistence/
 │   └── stats.py       # маршруты /stats (GET)
 ├── alembic/
 │   └── versions/      # автосозданные версии
-├── request_logs.db    # SQLite база данных (создается автоматически)
+├── history.db    # SQLite база данных (создается автоматически)
 ├── requirements.txt   # зависимости
 ├── alembic.ini        # настройки Alembic
 ```
