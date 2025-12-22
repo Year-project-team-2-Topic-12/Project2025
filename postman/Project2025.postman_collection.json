@@ -1,0 +1,37 @@
+{
+	"info": {
+		"_postman_id": "7df9cc52-ff44-48e3-9e2a-2ca1c16d323d",
+		"name": "Project2025",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "1781732"
+	},
+	"item": [
+		{
+			"name": "get stats",
+			"request": {
+				"method": "GET",
+				"header": []
+			},
+			"response": []
+		},
+		{
+			"name": "inference",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "https://localhost:8000/forward",
+					"protocol": "https",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"forward"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

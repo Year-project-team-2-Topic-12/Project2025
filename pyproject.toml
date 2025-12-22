@@ -1,0 +1,51 @@
+[project]
+name = "project2025"
+version = "0.1.0"
+description = "ML + service project"
+requires-python = ">=3.13.7"
+
+dependencies = [
+  # === ML core ===
+  "numpy>=2,<2.3.0",   # ⚠️ фикс opencv-конфликта
+  "pandas==2.3.3",
+  "scipy==1.16.3",
+  "scikit-learn==1.7.2",
+  "tqdm==4.67.1",
+  "protobuf==6.33.2",
+  "python-dotenv==1.2.1",
+  "kagglehub==0.3.13",
+  "xgboost==3.1.2",
+  # === Service ===
+  "fastapi>=0.126",
+  "sqlalchemy>=2.0.45",
+  "alembic>=1.17.2",
+  "uvicorn>=0.40.0",
+  "python-multipart>=0.0.21",
+]
+[project.optional-dependencies]
+
+viz = [
+  "matplotlib==3.10.7",
+  "seaborn==0.13.2",
+  "Pillow==12.0.0",
+]
+
+cv = [
+  "opencv-python==4.12.0.88",
+  "scikit-image>=0.23",
+]
+
+notebooks = [
+  "ipykernel",
+  "ipython==9.6.0",
+  "jupyterlab==4.4.9",
+]
+
+dev = [
+]
+[tool.setuptools]
+packages = ["backend", "backend.routers", "ml"]
+package-dir = { "backend" = "service/src/backend", "ml" = "packages/ml/src" }
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"

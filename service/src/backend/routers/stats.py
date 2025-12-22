@@ -1,7 +1,7 @@
 from fastapi import APIRouter
-from database import engine
+from backend.database import engine
 from sqlalchemy.orm import Session as OrmSession
-import crud
+from backend import crud
 import numpy as np
 
 router = APIRouter()
