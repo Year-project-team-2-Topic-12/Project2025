@@ -17,7 +17,7 @@ persistence/
 │   └── history.py     # маршруты /history (GET и DELETE)
 ├── alembic/
 │   └── versions/      # автосозданные версии
-├── request_logs.db    # SQLite база данных (создается автоматически)
+├── history.db    # SQLite база данных (создается автоматически)
 ├── requirements.txt   # зависимости
 ├── alembic.ini        # настройки Alembic
 ```
