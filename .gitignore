@@ -213,5 +213,6 @@ MURA-enhanced*
 *.npz
 backups/
 models/
+!models/model_hog_pca_poly_logreg_all.pkl
 .vite/
 *.db

@@ -7,7 +7,7 @@ from skimage import io
 from sklearn.base import BaseEstimator, TransformerMixin
 import pandas as pd
 from sklearn.model_selection import GridSearchCV
-from ml.env import MODELS_PATH, DATA_PATH, RESULTS_PATH, DATA_ROOT
+from .env import MODELS_PATH, DATA_PATH, RESULTS_PATH, DATA_ROOT
 from tqdm import tqdm
 
 

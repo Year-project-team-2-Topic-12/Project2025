@@ -2,7 +2,7 @@
 name = "project2025"
 version = "0.1.0"
 description = "ML + service project"
-requires-python = ">=3.13.7"
+requires-python = ">=3.11"
 
 dependencies = [
   # === ML core ===
@@ -44,7 +44,7 @@ notebooks = [
 dev = [
 ]
 [tool.setuptools]
-packages = ["backend", "backend.routers", "ml"]
+packages = ["backend", "ml"]
 package-dir = { "backend" = "service/src/backend", "ml" = "packages/ml/src" }
 [build-system]
 requires = ["setuptools>=68", "wheel"]

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
-from backend.database import engine
+from ..database import engine
 from backend import crud
 from sqlalchemy.orm import Session as OrmSession
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials

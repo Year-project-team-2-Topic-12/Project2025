@@ -4,7 +4,8 @@ from backend.routers import history, inference, stats
 app = FastAPI(
     title="MURA Classifier API",
     description="API для хранения и просмотра истории запросов",
-    version="1.0.0"
+    version="1.0.0",
+    servers=[{"url": ""}]
 )
 
 app.include_router(history.router)

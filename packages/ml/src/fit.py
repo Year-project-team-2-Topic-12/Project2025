@@ -1,5 +1,5 @@
 from sklearn.metrics import accuracy_score, cohen_kappa_score, f1_score, make_scorer, roc_auc_score
-from ml.data import load_model_pipeline, load_model_results, save_model_pipeline, save_model_results
+from .data import load_model_pipeline, load_model_results, save_model_pipeline, save_model_results
 from typing import Protocol
 import numpy as np
 import pandas as pd
@@ -14,7 +14,8 @@ class GetDataFunction(Protocol):
         self,
         paths_dataframe: pd.DataFrame,
         anatomy: str | None = None,
-        get_all: bool = False # Если True, то игнорируем anatomy
+        get_all: bool = False, # Если True, то игнорируем anatomy,
+        is_images: bool = False
     ) -> tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]: ...
 
 kappa_scorer = make_scorer(cohen_kappa_score)
@@ -41,6 +42,7 @@ def fit_pipeline_anatomies(
         use_decision_function=True,
         get_data_for_anatomy: GetDataFunction | None = None,
         only_anatomy: str | None = None,
+        is_images: bool = None,
         ):
 
     resulting_data = {
@@ -119,9 +121,11 @@ def fit_pipeline_anatomies(
         resulting_data['train_roc_auc'].append(metrics['train']['roc_auc'])
         resulting_data['valid_roc_auc'].append(metrics['valid']['roc_auc'])
 
+    param_images = {'is_images': is_images} if is_images is not None else {}
+
     if use_all:
         print(f"Обучаем модель {model_name_base} по всему датасету")
-        X_train, y_train, X_val, y_val = get_data_for_anatomy(paths_df, "ALL_anatomies", get_all=True)
+        X_train, y_train, X_val, y_val = get_data_for_anatomy(paths_df, "ALL_anatomies", get_all=True, **param_images)
         train_model_for_anatomy(X_train, y_train, X_val, y_val)
     else:
         print(f"Обучаем модель {model_name_base} по анатомиям")
@@ -129,7 +133,7 @@ def fit_pipeline_anatomies(
             if only_anatomy and anatomy != only_anatomy:
                 continue
             print(f"Обучаем модель по анатомии {anatomy}")
-            X_train, y_train, X_val, y_val = get_data_for_anatomy(paths_df, anatomy)
+            X_train, y_train, X_val, y_val = get_data_for_anatomy(paths_df, anatomy, **param_images)
             train_model_for_anatomy(X_train, y_train, X_val, y_val, anatomy=anatomy)
 
     results_df =  pd.DataFrame(resulting_data)
