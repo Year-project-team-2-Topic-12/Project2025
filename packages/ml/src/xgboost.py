@@ -4,7 +4,7 @@ from tqdm import tqdm
 from skimage.feature import hog, local_binary_pattern, graycomatrix, graycoprops
 import numpy as np
 import pandas as pd
-from ml.data import get_data_path, load_pickle, save_pickle
+from .data import get_data_path, load_pickle, save_pickle
 from scipy.stats import skew, kurtosis, entropy
 import cv2
 from sklearn.preprocessing import StandardScaler

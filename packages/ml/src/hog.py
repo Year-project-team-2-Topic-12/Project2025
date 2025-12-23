@@ -2,17 +2,45 @@ import numpy as np
 from skimage import io
 from skimage.feature import hog
 import pandas as pd
-from ml.data import get_data_path
+from .data import get_data_path
 from tqdm import tqdm
-
+from typing import Sequence, Any
 import glob
 import os
+from fastapi import UploadFile
 
 from sklearn.base import BaseEstimator, TransformerMixin
+from __future__ import annotations
+
+
 
 
 def get_hog_anatomy_filename(anatomy):
     return f"hog_{anatomy}.npz"
+
+def compute_hog(img: np.ndarray) -> np.ndarray:
+    return hog(
+        img,
+        orientations=9,
+        pixels_per_cell=(8, 8),
+        cells_per_block=(2, 2),
+        block_norm='L2-Hys'
+    )
+
+def compute_files_hog(
+    files: Sequence[np.ndarray],
+) -> np.ndarray:
+    hog_vecs: list[np.ndarray] = []
+
+    for file in files:
+        feat = compute_hog(file)
+        hog_vecs.append(feat)
+
+    if not hog_vecs:
+        raise ValueError("No images to compute HOG from")
+
+    study_feat = np.mean(hog_vecs, axis=0)
+    return study_feat
 
 def compute_study_hog(df_subset, as_gray=True, is_images=False):
         print('updated 1')
@@ -31,13 +59,7 @@ def compute_study_hog(df_subset, as_gray=True, is_images=False):
             hog_vecs = []
             for p in img_paths:
                 img = io.imread(p, as_gray=as_gray)
-                feat = hog(
-                    img,
-                    orientations=9,
-                    pixels_per_cell=(8, 8),
-                    cells_per_block=(2, 2),
-                    block_norm='L2-Hys'
-                )
+                feat = compute_hog(img)
                 hog_vecs.append(feat)
 
             if not hog_vecs:

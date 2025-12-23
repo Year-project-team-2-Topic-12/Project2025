@@ -1,5 +1,5 @@
 from sklearn.metrics import accuracy_score, cohen_kappa_score, f1_score, make_scorer, roc_auc_score
-from ml.data import load_model_pipeline, load_model_results, save_model_pipeline, save_model_results
+from .data import load_model_pipeline, load_model_results, save_model_pipeline, save_model_results
 from typing import Protocol
 import numpy as np
 import pandas as pd
