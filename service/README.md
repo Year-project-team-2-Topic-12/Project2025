@@ -17,9 +17,9 @@ backend/
 ├── models.py            # SQLAlchemy модели (RequestLog и User)
 ├── crud.py              # Логика взаимодействия с БД (логи и пользователи)
 ├── database.py          # Настройка подключения к SQLite
-├── security.py          # ✅ ТВОЕ: Логика JWT, хеширование и AuthMiddleware
+├── security.py          # Логика JWT, хеширование и AuthMiddleware
 ├── routers/
-│   ├── auth.py          # ✅ ТВОЕ: Маршрут /auth/login (вход в систему)
+│   ├── auth.py          # Маршрут /auth/login (вход в систему)
 │   ├── history.py       # Маршруты /history (просмотр и удаление)
 │   └── stats.py         # Маршруты /stats (статистика)
 ├── alembic/             # Папка миграций БД
