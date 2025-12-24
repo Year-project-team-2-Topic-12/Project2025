@@ -1,5 +1,6 @@
 from fastapi import FastAPI
-from backend.routers import history, inference, stats
+from backend.routers import history, inference, stats,  auth
+from backend import security
 
 app = FastAPI(
     title="MURA Classifier API",
@@ -7,6 +8,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Подключения Middleware
+app.add_middleware(security.AuthMiddleware)
+
+app.include_router(auth.router)
 app.include_router(history.router)
 app.include_router(stats.router)
 app.include_router(inference.router)

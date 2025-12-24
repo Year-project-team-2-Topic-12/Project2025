@@ -21,6 +21,8 @@ dependencies = [
   "alembic>=1.17.2",
   "uvicorn>=0.40.0",
   "python-multipart>=0.0.21",
+  "passlib[bcrypt]>=1.7.4",         # Библиотека для хеширования паролей (чтобы не хранить их в открытом виде)
+  "python-jose[cryptography]>=3.3.0",
 ]
 [project.optional-dependencies]
 
