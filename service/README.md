@@ -5,43 +5,57 @@
 - Возможность удалить всю историю через DELETE `/history` (с авторизацией)
 - Механизм Alembic-митаций для управления структурой БД
 - статистика по успешным запросам (среднее время, квантили, размеры изображений) через GET `/stats`
-
+-Безопасный вход в систему с выдачей временных токенов доступа.
+-Использование алгоритма bcrypt (библиотека passlib) для безопасного хранения данных пользователей.
+-Распределения ролей на Admin(польное права) и User(может выполнить инференс и просматривать историю запросов).
+-Middleware - защита на уровне приложения, который проверяет токены до того, как запрос попадет в роутеры.
 
 **Структура:**
 ```text
-persistence/
-├── main.py            # точка входа в приложение
-├── models.py          # модель таблицы RequestLog
-├── crud.py            # логика сохранения и чтения логов
-├── database.py        # подключение к SQLite через SQLAlchemy
+backend/
+├── main.py              # Точка входа: подключение роутеров и Middleware
+├── models.py            # SQLAlchemy модели (RequestLog и User)
+├── crud.py              # Логика взаимодействия с БД (логи и пользователи)
+├── database.py          # Настройка подключения к SQLite
+├── security.py          # ✅ ТВОЕ: Логика JWT, хеширование и AuthMiddleware
 ├── routers/
-│   └── history.py     # маршруты /history (GET и DELETE)
-│   └── stats.py       # маршруты /stats (GET)
-├── alembic/
-│   └── versions/      # автосозданные версии
-├── history.db    # SQLite база данных (создается автоматически)
-├── requirements.txt   # зависимости
-├── alembic.ini        # настройки Alembic
+│   ├── auth.py          # ✅ ТВОЕ: Маршрут /auth/login (вход в систему)
+│   ├── history.py       # Маршруты /history (просмотр и удаление)
+│   └── stats.py         # Маршруты /stats (статистика)
+├── alembic/             # Папка миграций БД
+├── history.db           # SQLite база данных
+├── pyproject.toml       # Зависимости проекта (включая passlib и jose)
+├── alembic.ini          # Конфигурация Alembic
+└── bootstrap.sh         # Скрипт автоматизации разработки
 ```
 
 
 **Тестирование:**
-* Создать виртуальное окружение и установить requirements
+* Используйте скрипт автоматизации для установки всех зависимостей (включая новые библиотеки для безопасности):
 ```text
-pyenv shell 3.13.7
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+./bootstrap.sh
+# Выберите пункт 4 (Install ALL deps)
 ```
 
-* Применить миграции Alembic, создаст файл базы данных history.db и таблицу request_logs
+* Применить миграции Alembic, создаст файл базы данных 
+./bootstrap.sh
+# Выберите пункт 7 (Alembic revision --autogenerate), назовите "add_users"
+# Выберите пункт 6 (Alembic upgrade head)
+```
+*Инициализация пользователей
+Запустите скрипт для создания первого администратора и тестового пользователя:
+
 ```text
-alembic upgrade head
+python init_admin.py
+Admin: admin / admin
+
+User: user / user
 ```
 
 * Запуск приложения (URL http://127.0.0.1:8000/docs)
 ```text
-uvicorn main:app --reload
+./bootstrap.sh
+# Выберите пункт 5 (Run backend)
 ```
 
 Логи сохраняются в history.db
@@ -97,3 +111,22 @@ async def forward(image: UploadFile):
 
     return {"result": result}
 ```
+*Как работает авторизация 
+
+В проекте реализован AuthMiddleware (находится в security.py), который перехватывает каждый входящий запрос:
+
+Открытые пути: Пути /auth/login, /docs и /openapi.json открыты для всех.
+
+Проверка токена: Для всех остальных путей проверяется заголовок Authorization: Bearer <token>.
+
+Контроль ролей: Если пользователь пытается выполнить DELETE /history, Middleware проверяет, установлена ли у него роль admin в базе данных.
+
+Если роль user, возвращается ошибка 403 Forbidden.
+
+*Пример использования безопасности
+
+1. Получение токена: Отправьте POST запрос на /auth/login с вашим логином и паролем. В ответ вы получите access_token.
+
+2. Авторизация в Swagger: Нажмите кнопку Authorize в правом верхнем углу страницы /docs и вставьте полученный токен.
+
+3. Защищенный запрос: Теперь при вызове /history сервер будет знать, кто вы, и разрешит (или запретит) действие в зависимости от вашей роли.

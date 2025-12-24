@@ -18,3 +18,11 @@ class RequestLog(Base):
     duration = Column(Float) # сколько времени заняло
     result = Column(String) #
     status = Column(Integer) # HTTP код ответа
+
+class User(Base):
+    __tablename__ = "users"  # Имя таблицы в базе данных 
+
+    id = Column(Integer, primary_key=True, index=True) # Уникальный номер (1, 2, 3...)
+    username = Column(String, unique=True, index=True) # Логин. unique=True не даст создать двух юзеров с одним именем.
+    hashed_password = Column(String) # Мы не храним пароль, мы храним его "хеш" (набор символов $2b$12$eX...)
+    role = Column(String, default="user") # Роль 'user' (обычный) или 'admin' (суперпользователь)
