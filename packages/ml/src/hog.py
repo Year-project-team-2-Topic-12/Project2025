@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 from skimage import io
 from skimage.feature import hog
@@ -7,13 +8,8 @@ from tqdm import tqdm
 from typing import Sequence, Any
 import glob
 import os
-from fastapi import UploadFile
 
 from sklearn.base import BaseEstimator, TransformerMixin
-from __future__ import annotations
-
-
-
 
 def get_hog_anatomy_filename(anatomy):
     return f"hog_{anatomy}.npz"

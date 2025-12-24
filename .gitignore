@@ -213,5 +213,6 @@ MURA-enhanced*
 *.npz
 backups/
 models/
+!models/
 .vite/
 *.db
