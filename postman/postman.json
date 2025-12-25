@@ -1,0 +1,524 @@
+{
+  "auth": {
+    "bearer": [
+      {
+        "key": "token",
+        "type": "string",
+        "value": "{{TOKEN}}"
+      }
+    ],
+    "type": "bearer"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "const token = pm.environment.get(\"TOKEN\");",
+          "if (token) { return; }",
+          "const baseUrl = pm.environment.get(\"BASE_URL\");",
+          "const username = pm.environment.get(\"USERNAME\");",
+          "const password = pm.environment.get(\"PASSWORD\");",
+          "pm.sendRequest({",
+          "  url: `${baseUrl}/auth/login`,",
+          "  method: \"POST\",",
+          "  header: { \"Content-Type\": \"application/x-www-form-urlencoded\" },",
+          "  body: {",
+          "    mode: \"urlencoded\",",
+          "    urlencoded: [",
+          "      { key: \"username\", value: username },",
+          "      { key: \"password\", value: password }",
+          "    ]",
+          "  }",
+          "}, (err, res) => {",
+          "  if (err) { console.error(err); return; }",
+          "  let json;",
+          "  try { json = res.json(); } catch (e) {",
+          "    console.error(\"Login response is not JSON\", res.text());",
+          "    return;",
+          "  }",
+          "  if (!json || !json.access_token) {",
+          "    console.error(\"Login response missing access_token\", json);",
+          "    return;",
+          "  }",
+          "  pm.environment.set(\"TOKEN\", json.access_token);",
+          "});"
+        ],
+        "type": "text/javascript"
+      }
+    }
+  ],
+  "info": {
+    "description": {
+      "content": "API для хранения и просмотра истории запросов",
+      "type": "text/markdown"
+    },
+    "name": "MURA Classifier API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "item": [
+    {
+      "item": [
+        {
+          "description": "",
+          "item": [
+            {
+              "name": "Forward",
+              "request": {
+                "body": {
+                  "formdata": [
+                    {
+                      "key": "image",
+                      "src": "",
+                      "type": "file"
+                    }
+                  ],
+                  "mode": "formdata"
+                },
+                "description": "",
+                "header": [
+                  {
+                    "description": "",
+                    "disabled": true,
+                    "key": "Content-Type",
+                    "value": "multipart/form-data"
+                  },
+                  {
+                    "description": "",
+                    "disabled": false,
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "description": "",
+                    "disabled": false,
+                    "key": "X-Debug",
+                    "value": "false"
+                  }
+                ],
+                "method": "POST",
+                "url": {
+                  "host": [
+                    "{{BASE_URL}}"
+                  ],
+                  "path": [
+                    "forward"
+                  ],
+                  "query": [],
+                  "raw": "{{BASE_URL}}/forward",
+                  "variable": []
+                }
+              },
+              "response": []
+            }
+          ],
+          "name": "/forward"
+        },
+        {
+          "description": "",
+          "item": [
+            {
+              "name": "Forward Multiple",
+              "request": {
+                "body": {
+                  "formdata": [
+                    {
+                      "key": "images",
+                      "src": "",
+                      "type": "file"
+                    }
+                  ],
+                  "mode": "formdata"
+                },
+                "description": "",
+                "header": [
+                  {
+                    "description": "",
+                    "disabled": true,
+                    "key": "Content-Type",
+                    "value": "multipart/form-data"
+                  },
+                  {
+                    "description": "",
+                    "disabled": false,
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "description": "",
+                    "disabled": false,
+                    "key": "X-Study-Ids",
+                    "value": "{{STUDY_IDS}}"
+                  },
+                  {
+                    "description": "",
+                    "disabled": false,
+                    "key": "X-Debug",
+                    "value": "false"
+                  }
+                ],
+                "method": "POST",
+                "url": {
+                  "host": [
+                    "{{BASE_URL}}"
+                  ],
+                  "path": [
+                    "forwardMultiple"
+                  ],
+                  "query": [],
+                  "raw": "{{BASE_URL}}/forwardMultiple",
+                  "variable": []
+                }
+              },
+              "response": []
+            }
+          ],
+          "name": "/forwardMultiple"
+        },
+        {
+          "description": "",
+          "item": [
+            {
+              "name": "Delete History",
+              "request": {
+                "body": {
+                  "mode": "raw",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  },
+                  "raw": ""
+                },
+                "description": "",
+                "header": [
+                  {
+                    "description": "",
+                    "disabled": false,
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "DELETE",
+                "url": {
+                  "host": [
+                    "{{BASE_URL}}"
+                  ],
+                  "path": [
+                    "history"
+                  ],
+                  "query": [],
+                  "raw": "{{BASE_URL}}/history",
+                  "variable": []
+                }
+              },
+              "response": []
+            }
+          ],
+          "name": "/history"
+        },
+        {
+          "description": "",
+          "item": [
+            {
+              "name": "Read History",
+              "request": {
+                "body": {
+                  "mode": "raw",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  },
+                  "raw": ""
+                },
+                "description": "",
+                "header": [
+                  {
+                    "description": "",
+                    "disabled": false,
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "url": {
+                  "host": [
+                    "{{BASE_URL}}"
+                  ],
+                  "path": [
+                    "history"
+                  ],
+                  "query": [],
+                  "raw": "{{BASE_URL}}/history",
+                  "variable": []
+                }
+              },
+              "response": []
+            }
+          ],
+          "name": "/history"
+        },
+        {
+          "description": "",
+          "item": [
+            {
+              "name": "Get Stats",
+              "request": {
+                "body": {
+                  "mode": "raw",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  },
+                  "raw": ""
+                },
+                "description": "",
+                "header": [
+                  {
+                    "description": "",
+                    "disabled": false,
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "url": {
+                  "host": [
+                    "{{BASE_URL}}"
+                  ],
+                  "path": [
+                    "stats"
+                  ],
+                  "query": [],
+                  "raw": "{{BASE_URL}}/stats",
+                  "variable": []
+                }
+              },
+              "response": []
+            }
+          ],
+          "name": "/stats"
+        }
+      ],
+      "name": "default"
+    },
+    {
+      "item": [
+        {
+          "description": "",
+          "item": [
+            {
+              "name": "Login",
+              "request": {
+                "body": {
+                  "mode": "urlencoded",
+                  "urlencoded": [
+                    {
+                      "key": "username",
+                      "type": "text",
+                      "value": "{{USERNAME}}"
+                    },
+                    {
+                      "key": "password",
+                      "type": "text",
+                      "value": "{{PASSWORD}}"
+                    }
+                  ]
+                },
+                "description": "",
+                "header": [
+                  {
+                    "description": "",
+                    "disabled": false,
+                    "key": "Content-Type",
+                    "value": "application/x-www-form-urlencoded"
+                  },
+                  {
+                    "description": "",
+                    "disabled": false,
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "url": {
+                  "host": [
+                    "{{BASE_URL}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "login"
+                  ],
+                  "query": [],
+                  "raw": "{{BASE_URL}}/auth/login",
+                  "variable": []
+                }
+              },
+              "response": []
+            }
+          ],
+          "name": "/auth/login"
+        },
+        {
+          "description": "",
+          "item": [
+            {
+              "name": "Register",
+              "request": {
+                "body": {
+                  "mode": "raw",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  },
+                  "raw": "{\n \"username\": \"<string>\",\n \"password\": \"<string>\"\n}"
+                },
+                "description": "",
+                "header": [
+                  {
+                    "description": "",
+                    "disabled": false,
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "description": "",
+                    "disabled": false,
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "description": "",
+                    "disabled": true,
+                    "key": "authorization",
+                    "value": ""
+                  }
+                ],
+                "method": "POST",
+                "url": {
+                  "host": [
+                    "{{BASE_URL}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "register"
+                  ],
+                  "query": [],
+                  "raw": "{{BASE_URL}}/auth/register",
+                  "variable": []
+                }
+              },
+              "response": []
+            }
+          ],
+          "name": "/auth/register"
+        },
+        {
+          "description": "",
+          "item": [
+            {
+              "name": "List Users",
+              "request": {
+                "body": {
+                  "mode": "raw",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  },
+                  "raw": ""
+                },
+                "description": "",
+                "header": [
+                  {
+                    "description": "",
+                    "disabled": false,
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "url": {
+                  "host": [
+                    "{{BASE_URL}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "users"
+                  ],
+                  "query": [],
+                  "raw": "{{BASE_URL}}/auth/users",
+                  "variable": []
+                }
+              },
+              "response": []
+            }
+          ],
+          "name": "/auth/users"
+        },
+        {
+          "description": "",
+          "item": [
+            {
+              "name": "Delete User",
+              "request": {
+                "body": {
+                  "mode": "raw",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  },
+                  "raw": ""
+                },
+                "description": "",
+                "header": [
+                  {
+                    "description": "",
+                    "disabled": false,
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "DELETE",
+                "url": {
+                  "host": [
+                    "{{BASE_URL}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "users",
+                    ":username"
+                  ],
+                  "query": [],
+                  "raw": "{{BASE_URL}}/auth/users/:username",
+                  "variable": [
+                    {
+                      "description": "",
+                      "key": "username",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ],
+          "name": "/auth/users/:username"
+        }
+      ],
+      "name": "Auth"
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "type": "string",
+      "value": ""
+    }
+  ]
+}

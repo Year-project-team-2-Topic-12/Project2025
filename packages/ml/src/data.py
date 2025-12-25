@@ -7,8 +7,11 @@ from skimage import io
 from sklearn.base import BaseEstimator, TransformerMixin
 import pandas as pd
 from sklearn.model_selection import GridSearchCV
-from ml.env import MODELS_PATH, DATA_PATH, RESULTS_PATH, DATA_ROOT
+from .env import MODELS_PATH, DATA_PATH, RESULTS_PATH, DATA_ROOT
 from tqdm import tqdm
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_anatomy_suffix(anatomy: str | None = None) -> str:
@@ -40,46 +43,45 @@ def get_data_path(data_fname: str) -> Path:
 
 def load_pickle(filepath: Path):
     try:
-        print("Загрузка данных из", filepath)
+        logger.debug("Загрузка данных из %s", filepath)
         with open(filepath, "rb") as f:
             return pickle.load(f)
     except FileNotFoundError:
-        print(f"Файл {filepath} не найден.")
+        logger.error("Файл %s не найден.", filepath)
         return None
 
 def save_pickle(data, filepath: Path):
-    print("Сохранение данных в", filepath)
+    logger.debug("Сохранение данных в %s", filepath)
     with open(filepath, "wb") as f:
         pickle.dump(data, f)
 
 def save_model_pipeline(model, model_name_base: str, anatomy: str | None = None):
     model_fname = get_model_fname(model_name_base, anatomy)
     filepath = get_models_path(model_fname)
-    print(f"Сохранение модели в {filepath}")
+    logger.debug("Сохранение модели в %s", filepath)
     save_pickle(model, filepath)
 
 
 def load_model_pipeline(model_name_base: str, anatomy: str | None = None):
     model_fname = get_model_fname(model_name_base, anatomy)
     filepath = get_models_path(model_fname)
-    print("load model pipeline:", model_fname, filepath)
-    print(f"Загрузка модели из {filepath}")
+    logger.debug("Загрузка модели из %s", filepath)
     return load_pickle(filepath)
 
 def save_model_results(results: pd.DataFrame, model_name_base: str, use_all: bool) -> GridSearchCV:
     results_fname = get_results_fname(model_name_base, use_all)
     filepath = get_results_path(results_fname)
-    print(f"Сохранение результатов в {filepath}")
+    logger.debug("Сохранение результатов в %s", filepath)
     results.to_csv(filepath, index=False)
 
 def load_model_results(model_name_base: str, use_all: bool) -> pd.DataFrame | None:
     results_fname = get_results_fname(model_name_base, use_all=use_all)
     filepath = get_results_path(results_fname)
     try:
-        print(f"Загрузка результатов из {filepath}")
+        logger.debug("Загрузка результатов из %s", filepath)
         return pd.read_csv(filepath)
     except FileNotFoundError:
-        print(f"Файл {results_fname} не найден.")
+        logger.error("Файл %s не найден.", filepath)
         return None
 
 class ImageLoader(BaseEstimator, TransformerMixin):
@@ -91,10 +93,10 @@ class ImageLoader(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         # X — это массив путей (список строк)
-        imgs = [
-            print(path) or io.imread(path, as_gray=self.as_gray)
-            for path in X
-        ]
+        imgs = []
+        for path in X:
+            logger.debug("Загрузка изображения %s", path)
+            imgs.append(io.imread(path, as_gray=self.as_gray))
         return np.array(imgs)
 
 
@@ -137,7 +139,7 @@ def parse_study_path(study_path: str, return_images=False):
 """
 def build_dataframe(root_dir: str = DATA_ROOT, return_images=False):
     records = []
-    print("Загружаем датафрейм с данными из корня:", root_dir)
+    logger.info("Загружаем датафрейм с данными из корня: %s", root_dir)
     for split in ['train', 'valid']:
         split_path = os.path.join(root_dir, split)
         if not os.path.isdir(split_path):

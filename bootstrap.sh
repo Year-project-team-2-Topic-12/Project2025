@@ -166,6 +166,50 @@ run_frontend() {
   run_and_wait npm run dev
 }
 
+generate_openapi_client() {
+  if ! has_dir "${FRONTEND_DIR}"; then
+    echo "✖ frontend/ not found at: ${FRONTEND_DIR}"
+    return 1
+  fi
+  if ! has_cmd node || ! has_cmd npm; then
+    echo "✖ node/npm is not installed (need Node.js for openapi-ts)"
+    return 1
+  fi
+  echo "▶ Generating OpenAPI client (ensure backend is running at ${BACKEND_HOST}:${BACKEND_PORT})"
+  run_and_wait_in_dir "${FRONTEND_DIR}" \
+    npx @hey-api/openapi-ts -i "http://${BACKEND_HOST}:${BACKEND_PORT}/openapi.json" -o src/client
+  echo "✔ OpenAPI client generated"
+}
+
+generate_postman_collection() {
+  if ! has_cmd docker; then
+    echo "✖ docker is not installed (needed for openapi-to-postman image)"
+    return 1
+  fi
+  if ! has_cmd jq; then
+    echo "✖ jq is not installed (needed to patch the Postman collection)"
+    return 1
+  fi
+  echo "▶ Generating Postman collection (ensure backend is running at ${BACKEND_HOST}:${BACKEND_PORT})"
+  run_and_wait_in_dir "${ROOT_DIR}" \
+    bash -c \
+    "docker run --rm --network host \
+      --user \"$(id -u):$(id -g)\" \
+      -v \"${PWD}:/local\" \
+      openapitools/openapi-generator-cli sh -lc '
+        curl -sS \"http://${BACKEND_HOST}:${BACKEND_PORT}/openapi.json\" -o /tmp/openapi.json &&
+        openapi-generator-cli generate -i /tmp/openapi.json -g postman-collection -o /local/postman
+      '"
+  if [[ -f "${ROOT_DIR}/postman/patch-collection.sh" ]]; then
+    echo "▶ Patching Postman collection"
+    run_and_wait_in_dir "${ROOT_DIR}/postman" bash patch-collection.sh
+    echo "✔ Postman collection patched"
+  else
+    echo "ℹ patch-collection.sh not found; skipping patch step"
+  fi
+  echo "✔ Postman collection generated"
+}
+
 install_all() {
   echo "▶ Installing all dependencies (python + frontend)..."
 
@@ -254,10 +298,12 @@ while true; do
   echo "6) Alembic upgrade head"
   echo "7) Alembic revision --autogenerate"
   echo "8) Run frontend (Vite)"
-  echo "9) Run JupyterLab"
-  echo "10) Show tree (filtered)"
-  echo "11) Status"
-  echo "12) Clean dependencies (remove venv, build artifacts, node_modules)"
+  echo "9) Generate OpenAPI client (frontend)"
+  echo "10) Generate Postman collection (frontend)"
+  echo "11) Run JupyterLab"
+  echo "12) Show tree (filtered)"
+  echo "13) Status"
+  echo "14) Clean dependencies (remove venv, build artifacts, node_modules)"
   echo "0) Exit"
   echo "==========================================="
   read -r -p "Choose: " CH
@@ -271,10 +317,12 @@ while true; do
     6) alembic_upgrade; pause ;;
     7) alembic_revision; pause ;;
     8) run_frontend; pause ;;
-    9) run_jupyter; pause ;;
-    10) show_tree; pause ;;
-    11) status_info; pause ;;
-    12) clean_deps; pause ;;
+    9) generate_openapi_client; pause ;;
+    10) generate_postman_collection; pause ;;
+    11) run_jupyter; pause ;;
+    12) show_tree; pause ;;
+    13) status_info; pause ;;
+    14) clean_deps; pause ;;
     0) echo "Bye!"; exit 0 ;;
     *) echo "Unknown option: ${CH}"; pause ;;
   esac
