@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session
 
 from backend.db.models import RequestLog
@@ -38,4 +38,6 @@ class RequestLogRepository:
         self.session.commit()
 
     def get_successful_logs(self):
-        return self.session.query(RequestLog).filter(RequestLog.status == 200).all()
+        result_field = func.lower(RequestLog.result)
+        no_error = or_(RequestLog.result.is_(None), ~result_field.contains("ошибка"))
+        return self.session.query(RequestLog).filter(no_error).all()

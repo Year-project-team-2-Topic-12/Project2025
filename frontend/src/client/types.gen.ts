@@ -221,13 +221,9 @@ export type RegisterResponse = {
  */
 export type RequestLogEntry = {
     /**
-     * Id
-     */
-    id: number;
-    /**
      * Timestamp
      */
-    timestamp: string;
+    timestamp?: string | null;
     /**
      * Input Meta
      */
@@ -243,7 +239,15 @@ export type RequestLogEntry = {
     /**
      * Status
      */
-    status?: number | null;
+    status?: number | string | null;
+    /**
+     * Image Width
+     */
+    image_width?: number | null;
+    /**
+     * Image Height
+     */
+    image_height?: number | null;
 };
 
 /**

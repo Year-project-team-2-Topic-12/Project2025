@@ -8,6 +8,7 @@ from backend.db.repositories.user_repository import UserRepository
 from backend.db.repositories.request_log_repository import RequestLogRepository
 from backend.services.auth_service import AuthService
 from backend.services.request_logging_service import RequestLoggingService
+from backend.services.stats_service import StatsService
 
 
 @lru_cache(maxsize=1)
@@ -37,6 +38,12 @@ def get_request_logging_service(
     repo: RequestLogRepository = Depends(get_request_log_repository),
 ) -> RequestLoggingService:
     return RequestLoggingService(repo)
+
+
+def get_stats_service(
+    repo: RequestLogRepository = Depends(get_request_log_repository),
+) -> StatsService:
+    return StatsService(repo)
 
 def get_inference_service(
         hog_predictor_multiple = Depends(get_hog_predictor_multiple),
