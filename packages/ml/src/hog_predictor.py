@@ -10,18 +10,20 @@ class HogPredictor:
         self.model: Pipeline = load_model_pipeline(self.model_name)
         print("Model loaded successfully.", self.model)
 
-    def predict(self, image: np.ndarray):
+    def predict(self, images: np.ndarray) -> np.ndarray:
         print(f"Predicting using the model on the provided image")
-        return self.model.predict([image])
+        return self.model.predict(images)
 
-    def predict_with_confidence(self, image: np.ndarray) -> tuple[object, float | None]:
-        prediction = self.predict(image)
-        prediction_value = prediction.item() if isinstance(prediction, np.ndarray) and prediction.size == 1 else prediction
+    def predict_with_confidence(self, image: np.ndarray, is_multiple=False) -> tuple[np.ndarray, float | np.ndarray | None]:
+        images = np.array([image]) if not is_multiple else image
+        prediction = self.predict(images)
         confidence = None
 
         if hasattr(self.model, "predict_proba"):
-            proba = self.model.predict_proba([image])
+            proba = self.model.predict_proba(images)
             if isinstance(proba, np.ndarray) and proba.size > 0:
+                confidence = proba[np.arange(len(images)), images]
+
                 confidence = float(np.max(proba))
 
-        return prediction_value, confidence
+        return prediction, confidence

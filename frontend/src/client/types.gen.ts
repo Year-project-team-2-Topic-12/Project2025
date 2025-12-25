@@ -25,6 +25,36 @@ export type BodyForwardMultipleForwardMultiplePost = {
 };
 
 /**
+ * Body_login_auth_login_post
+ */
+export type BodyLoginAuthLoginPost = {
+    /**
+     * Grant Type
+     */
+    grant_type?: string | null;
+    /**
+     * Username
+     */
+    username: string;
+    /**
+     * Password
+     */
+    password: string;
+    /**
+     * Scope
+     */
+    scope?: string;
+    /**
+     * Client Id
+     */
+    client_id?: string | null;
+    /**
+     * Client Secret
+     */
+    client_secret?: string | null;
+};
+
+/**
  * DebugPayload
  */
 export type DebugPayload = {
@@ -99,6 +129,20 @@ export type PredictionResponse = {
 };
 
 /**
+ * RegisterRequest
+ */
+export type RegisterRequest = {
+    /**
+     * Username
+     */
+    username: string;
+    /**
+     * Password
+     */
+    password: string;
+};
+
+/**
  * ValidationError
  */
 export type ValidationError = {
@@ -114,6 +158,58 @@ export type ValidationError = {
      * Error Type
      */
     type: string;
+};
+
+export type LoginAuthLoginPostData = {
+    body: BodyLoginAuthLoginPost;
+    path?: never;
+    query?: never;
+    url: '/auth/login';
+};
+
+export type LoginAuthLoginPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type LoginAuthLoginPostError = LoginAuthLoginPostErrors[keyof LoginAuthLoginPostErrors];
+
+export type LoginAuthLoginPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type RegisterAuthRegisterPostData = {
+    body: RegisterRequest;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/auth/register';
+};
+
+export type RegisterAuthRegisterPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RegisterAuthRegisterPostError = RegisterAuthRegisterPostErrors[keyof RegisterAuthRegisterPostErrors];
+
+export type RegisterAuthRegisterPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
 };
 
 export type DeleteHistoryHistoryDeleteData = {

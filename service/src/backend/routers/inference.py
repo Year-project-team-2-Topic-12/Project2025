@@ -46,6 +46,7 @@ def forward_multiple(
     validate_content_type(request)
 
     parsed_study_ids = [item.strip() for item in study_ids.split(",") if item.strip()]
+    
     if len(images) != len(parsed_study_ids):
         raise HTTPException(status_code=400, detail="bad request")
     for file in images:

@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from backend.routers import history, inference, stats,  auth
-from backend import security
+from .security import AuthMiddleware
+from .init_admin import ensure_admin
+from contextlib import asynccontextmanager
 
 app = FastAPI(
     title="MURA Classifier API",
@@ -10,12 +12,20 @@ app = FastAPI(
 )
 
 # Подключения Middleware
-app.add_middleware(security.AuthMiddleware)
+app.add_middleware(AuthMiddleware)
 
 app.include_router(auth.router)
 app.include_router(history.router)
 app.include_router(stats.router)
 app.include_router(inference.router)
+
+@asynccontextmanager
+async def lifespan():
+    print("Запуск приложения...")
+    ensure_admin()
+    yield
+    print("Завершение приложения...")
+    
 
 # для тестовой записи логов при запуске
 from backend.database import engine

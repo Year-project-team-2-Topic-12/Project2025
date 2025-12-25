@@ -1,6 +1,17 @@
-import { useState, FormEvent } from 'react';
+import { useEffect, useState, FormEvent } from 'react';
 import './App.css';
-import { forwardForwardPost, forwardMultipleForwardMultiplePost } from './client';
+import {
+  forwardForwardPost,
+  forwardMultipleForwardMultiplePost,
+  loginAuthLoginPost,
+  registerAuthRegisterPost,
+} from './client';
+import { client } from './client/client.gen';
+import { AuthForm } from './components/AuthForm';
+import { CreateUserForm } from './components/CreateUserForm';
+import { SingleUploadForm } from './components/SingleUploadForm';
+import { StudyUploadForm } from './components/StudyUploadForm';
+import type { StudyInput } from './types';
 import type {
   BodyForwardForwardPost,
   BodyForwardMultipleForwardMultiplePost,
@@ -10,14 +21,24 @@ import type {
   PredictionResponse,
 } from './client';
 
-type StudyInput = {
-  id: string;
-  name: string;
-  files: File[];
+type LoginResponse = {
+  access_token?: string;
+  token_type?: string;
 };
 
 function App() {
-  const [mode, setMode] = useState<'single' | 'multiple'>('single');
+  const [authToken, setAuthToken] = useState<string | null>(() => localStorage.getItem('authToken'));
+  const [authUser, setAuthUser] = useState<string | null>(() => localStorage.getItem('authUser'));
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [loginUsername, setLoginUsername] = useState('admin');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [newUsername, setNewUsername] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [createUserLoading, setCreateUserLoading] = useState(false);
+  const [createUserError, setCreateUserError] = useState<string | null>(null);
+  const [createUserSuccess, setCreateUserSuccess] = useState<string | null>(null);
+
   const [singleFile, setSingleFile] = useState<File | null>(null);
   const [studies, setStudies] = useState<StudyInput[]>([
     { id: crypto.randomUUID(), name: 'Study 1', files: [] },
@@ -29,6 +50,106 @@ function App() {
 
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (authToken) {
+      localStorage.setItem('authToken', authToken);
+    } else {
+      localStorage.removeItem('authToken');
+    }
+    if (authUser) {
+      localStorage.setItem('authUser', authUser);
+    } else {
+      localStorage.removeItem('authUser');
+    }
+
+    client.setConfig({
+      headers: {
+        Authorization: authToken ? `Bearer ${authToken}` : null,
+      },
+    });
+  }, [authToken, authUser]);
+
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAuthLoading(true);
+    setAuthError(null);
+
+    try {
+      const response = (await loginAuthLoginPost({
+        body: {
+          username: loginUsername,
+          password: loginPassword,
+        },
+        responseStyle: 'data',
+        throwOnError: true,
+      })) as LoginResponse;
+
+      const token = response?.access_token;
+      if (!token) {
+        throw new Error('Не удалось получить токен');
+      }
+
+      setAuthToken(token);
+      setAuthUser(loginUsername);
+      setLoginPassword('');
+    } catch (err) {
+      if (err instanceof Error) {
+        setAuthError(err.message);
+      } else {
+        setAuthError('Ошибка авторизации');
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setAuthToken(null);
+    setAuthUser(null);
+    setPredictionSingle(null);
+    setPredictionMultiple(null);
+    setError(null);
+  };
+
+  const handleCreateUser = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!authToken) {
+      setCreateUserError('Сначала выполните вход');
+      return;
+    }
+
+    setCreateUserLoading(true);
+    setCreateUserError(null);
+    setCreateUserSuccess(null);
+
+    try {
+      const data = await registerAuthRegisterPost({
+        body: {
+          username: newUsername,
+          password: newPassword,
+        },
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+        responseStyle: 'data',
+        throwOnError: true,
+      });
+      const createdUsername =
+        data && typeof data === 'object' && 'username' in data ? (data as { username?: string }).username : undefined;
+      setCreateUserSuccess(`Пользователь ${createdUsername ?? newUsername} создан`);
+      setNewUsername('');
+      setNewPassword('');
+    } catch (err) {
+      if (err instanceof Error) {
+        setCreateUserError(err.message);
+      } else {
+        setCreateUserError('Ошибка создания пользователя');
+      }
+    } finally {
+      setCreateUserLoading(false);
+    }
+  };
 
   const updateStudyFiles = (index: number, files: File[]) => {
     setStudies((prev) => prev.map((study, i) => (i === index ? { ...study, files } : study)));
@@ -54,63 +175,90 @@ function App() {
     setPredictionMultiple(null);
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSingleFileChange = (file: File | null) => {
+    setSingleFile(file);
+    setPredictionSingle(null);
+    setPredictionMultiple(null);
+    setError(null);
+  };
+
+  const handleSingleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (mode === 'single') {
-      if (!singleFile) {
-        alert("Пожалуйста, выберите файл!");
-        return;
-      }
-    } else {
-      if (studies.length === 0 || studies.some((study) => study.files.length === 0)) {
-        alert("Пожалуйста, добавьте хотя бы один файл в каждую группу!");
-        return;
-      }
+    if (!singleFile) {
+      alert("Пожалуйста, выберите файл!");
+      return;
     }
 
     setLoading(true);
     setError(null);
 
     try {
-      if (mode === 'single') {
-        const body: BodyForwardForwardPost = { image: singleFile as File };
-        const headers: ForwardForwardPostData['headers'] = {
-          'X-Debug': debug,
-        };
-        const data = await forwardForwardPost({
-          body,
-          headers,
-          responseStyle: 'data',
-          throwOnError: true,
-        });
-        setPredictionSingle(data);
-        setPredictionMultiple(null);
+      const authHeaders = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+
+      const body: BodyForwardForwardPost = { image: singleFile as File };
+      const headers = {
+        'X-Debug': debug,
+        ...authHeaders,
+      } as ForwardForwardPostData['headers'] & { Authorization?: string };
+      const data = await forwardForwardPost({
+        body,
+        headers,
+        responseStyle: 'data',
+        throwOnError: true,
+      });
+      setPredictionSingle(data);
+      setPredictionMultiple(null);
+
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
       } else {
-        const files: File[] = [];
-        const studyIds: string[] = [];
-        studies.forEach((study) => {
-          study.files.forEach((file) => {
-            files.push(file);
-            studyIds.push(study.id);
-          });
-        });
-
-        const body: BodyForwardMultipleForwardMultiplePost = { images: files };
-        const headers: ForwardMultipleForwardMultiplePostData['headers'] = {
-          'X-Study-Ids': studyIds.join(','),
-          'X-Debug': debug,
-        };
-        const data = await forwardMultipleForwardMultiplePost({
-          body,
-          headers,
-          responseStyle: 'data',
-          throwOnError: true,
-        });
-        setPredictionMultiple(data);
-        setPredictionSingle(null);
+        console.log(err);
+        setError(`ошибка: ${err.message || err.detail || String(err)}`);
       }
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  const handleStudySubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (studies.length === 0 || studies.some((study) => study.files.length === 0)) {
+      alert("Пожалуйста, добавьте хотя бы один файл в каждую группу!");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const authHeaders = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+
+      const files: File[] = [];
+      const studyIds: string[] = [];
+      studies.forEach((study) => {
+        study.files.forEach((file) => {
+          files.push(file);
+          studyIds.push(study.id);
+        });
+      });
+
+      const body: BodyForwardMultipleForwardMultiplePost = { images: files };
+      const headers = {
+        'X-Study-Ids': studyIds.join(','),
+        'X-Debug': debug,
+        ...authHeaders,
+      } as ForwardMultipleForwardMultiplePostData['headers'] & { Authorization?: string };
+      const data = await forwardMultipleForwardMultiplePost({
+        body,
+        headers,
+        responseStyle: 'data',
+        throwOnError: true,
+      });
+      setPredictionMultiple(data);
+      setPredictionSingle(null);
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -127,127 +275,60 @@ function App() {
     <div className="container">
       <h1>MURA ML Upload</h1>
 
-      <form onSubmit={handleSubmit} className="upload-form">
-        <div className="mode-toggle">
-          <label>
-            <input
-              type="radio"
-              name="mode"
-              value="single"
-              checked={mode === 'single'}
-              onChange={() => {
-                setMode('single');
-                setPredictionSingle(null);
-                setPredictionMultiple(null);
-                setError(null);
-              }}
-            />
-            Одна картинка
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="mode"
-              value="multiple"
-              checked={mode === 'multiple'}
-              onChange={() => {
-                setMode('multiple');
-                setPredictionSingle(null);
-                setPredictionMultiple(null);
-                setError(null);
-              }}
-            />
-            Исследование / несколько исследований
-          </label>
-        </div>
+      <AuthForm
+        authToken={authToken}
+        authUser={authUser}
+        authLoading={authLoading}
+        authError={authError}
+        loginUsername={loginUsername}
+        loginPassword={loginPassword}
+        onLogin={handleLogin}
+        onLogout={handleLogout}
+        onLoginUsernameChange={setLoginUsername}
+        onLoginPasswordChange={setLoginPassword}
+      />
 
-        {mode === 'single' ? (
-          <div className="single-card">
-            <label className="file-input">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(event) => {
-                  const file = event.target.files && event.target.files[0] ? event.target.files[0] : null;
-                  setSingleFile(file);
-                  setPredictionSingle(null);
-                  setPredictionMultiple(null);
-                  setError(null);
-                }}
-              />
-              <span>Выбрать файл</span>
-            </label>
-            <div className="file-hint">
-              {singleFile ? singleFile.name : 'Пока нет файла'}
-            </div>
-          </div>
-        ) : (
-          <div className="study-grid">
-            {studies.map((study, index) => (
-              <div className="study-card" key={study.id}>
-                <div className="study-header">
-                  <input
-                    className="study-name"
-                    value={study.name}
-                    onChange={(event) => updateStudyName(index, event.target.value)}
-                    placeholder={`Study ${index + 1}`}
-                  />
-                  {studies.length > 1 && (
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() => removeStudy(index)}
-                    >
-                      ❌
-                    </button>
-                  )}
-                </div>
-                <label className="file-input">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={(event) =>
-                      updateStudyFiles(index, event.target.files ? Array.from(event.target.files) : [])
-                    }
-                  />
-                  <span>Выбрать файлы</span>
-                </label>
-                <div className="file-hint">
-                  {study.files.length > 0
-                    ? `Файлов: ${study.files.length}`
-                    : 'Пока нет файлов'}
-                </div>
-              </div>
-            ))}
-            <button type="button" className="add-card" onClick={addStudy}>
-              + Добавить study
-            </button>
-          </div>
-        )}
-
-        <div className="form-actions">
-          <button
-            type="submit"
-            disabled={
-              loading ||
-              (mode === 'single'
-                ? singleFile == null
-                : studies.length === 0 || studies.some((study) => study.files.length === 0))
-            }
-          >
-            {loading ? 'Загрузка...' : 'Отправить на анализ'}
-          </button>
-          <label className="debug-toggle">
-            <input
-              type="checkbox"
-              checked={debug}
-              onChange={(event) => setDebug(event.target.checked)}
+      {authToken ? (
+        <>
+          {authUser === 'admin' && (
+            <CreateUserForm
+              username={newUsername}
+              password={newPassword}
+              loading={createUserLoading}
+              error={createUserError}
+              success={createUserSuccess}
+              onSubmit={handleCreateUser}
+              onUsernameChange={setNewUsername}
+              onPasswordChange={setNewPassword}
             />
-            Показать debug-данные
-          </label>
+          )}
+
+          <SingleUploadForm
+            singleFile={singleFile}
+            loading={loading}
+            debug={debug}
+            onSubmit={handleSingleSubmit}
+            onFileChange={handleSingleFileChange}
+            onDebugChange={setDebug}
+          />
+
+          <StudyUploadForm
+            studies={studies}
+            loading={loading}
+            debug={debug}
+            onSubmit={handleStudySubmit}
+            onStudyNameChange={updateStudyName}
+            onStudyFilesChange={updateStudyFiles}
+            onAddStudy={addStudy}
+            onRemoveStudy={removeStudy}
+            onDebugChange={setDebug}
+          />
+        </>
+      ) : (
+        <div className="auth-hint">
+          Войдите, чтобы отправлять изображения на анализ.
         </div>
-      </form>
+      )}
 
       {error && <div style={{ color: 'red', marginTop: '10px' }}>{error}</div>}
 

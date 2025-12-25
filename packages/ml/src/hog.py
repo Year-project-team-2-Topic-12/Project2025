@@ -27,7 +27,7 @@ def compute_hog(img: np.ndarray, visualize=False) -> np.ndarray:
 
 def compute_hog_with_visualization(img: np.ndarray, is_multiple=False) -> tuple[np.ndarray, np.ndarray]:
     if not is_multiple:
-        img = np.ndarray([img])
+        img = np.array([img])
     features_list = []
     hog_images = []
     for im in img:
