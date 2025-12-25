@@ -3,14 +3,20 @@ import './App.css';
 import {
   forwardForwardPost,
   forwardMultipleForwardMultiplePost,
+  deleteHistoryHistoryDelete,
+  getStatsStatsGet,
+  deleteUserAuthUsersUsernameDelete,
   loginAuthLoginPost,
+  listUsersAuthUsersGet,
+  readHistoryHistoryGet,
   registerAuthRegisterPost,
 } from './client';
 import { client } from './client/client.gen';
 import { AuthForm } from './components/AuthForm';
-import { CreateUserForm } from './components/CreateUserForm';
-import { SingleUploadForm } from './components/SingleUploadForm';
-import { StudyUploadForm } from './components/StudyUploadForm';
+import { HistoryTab } from './components/tabs/HistoryTab';
+import { UsersTab } from './components/tabs/UsersTab';
+import { StatsTab } from './components/tabs/StatsTab';
+import { PredictionsTab } from './components/tabs/PredictionsTab';
 import type { StudyInput } from './types';
 import type {
   BodyForwardForwardPost,
@@ -19,6 +25,9 @@ import type {
   ForwardImageResponse,
   ForwardMultipleForwardMultiplePostData,
   PredictionResponse,
+  RequestLogEntry,
+  StatsResponse,
+  UserResponse,
 } from './client';
 
 type LoginResponse = {
@@ -51,6 +60,19 @@ function App() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [activeTab, setActiveTab] = useState<'history' | 'users' | 'stats' | 'predictions'>('predictions');
+  const [historyItems, setHistoryItems] = useState<RequestLogEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [statsData, setStatsData] = useState<StatsResponse | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [users, setUsers] = useState<UserResponse[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
+
+  const isAdmin = authUser === 'admin';
+
   useEffect(() => {
     if (authToken) {
       localStorage.setItem('authToken', authToken);
@@ -69,6 +91,12 @@ function App() {
       },
     });
   }, [authToken, authUser]);
+
+  useEffect(() => {
+    if (!isAdmin && activeTab === 'users') {
+      setActiveTab('history');
+    }
+  }, [activeTab, isAdmin]);
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -140,6 +168,9 @@ function App() {
       setCreateUserSuccess(`Пользователь ${createdUsername ?? newUsername} создан`);
       setNewUsername('');
       setNewPassword('');
+      if (isAdmin) {
+        await fetchUsers();
+      }
     } catch (err) {
       if (err instanceof Error) {
         setCreateUserError(err.message);
@@ -150,6 +181,122 @@ function App() {
       setCreateUserLoading(false);
     }
   };
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const data = await readHistoryHistoryGet({
+        responseStyle: 'data',
+        throwOnError: true,
+      });
+      setHistoryItems((data as RequestLogEntry[]) ?? []);
+    } catch (err) {
+      if (err instanceof Error) {
+        setHistoryError(err.message);
+      } else {
+        setHistoryError('Ошибка загрузки истории');
+      }
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleDeleteHistory = async () => {
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      await deleteHistoryHistoryDelete({
+        responseStyle: 'data',
+        throwOnError: true,
+      });
+      await fetchHistory();
+    } catch (err) {
+      if (err instanceof Error) {
+        setHistoryError(err.message);
+      } else {
+        setHistoryError('Ошибка удаления истории');
+      }
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const fetchStats = async () => {
+    setStatsLoading(true);
+    setStatsError(null);
+    try {
+      const data = await getStatsStatsGet({
+        responseStyle: 'data',
+        throwOnError: true,
+      });
+      setStatsData(data as StatsResponse);
+    } catch (err) {
+      if (err instanceof Error) {
+        setStatsError(err.message);
+      } else {
+        setStatsError('Ошибка загрузки статистики');
+      }
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  const fetchUsers = async () => {
+    setUsersLoading(true);
+    setUsersError(null);
+    try {
+      const data = await listUsersAuthUsersGet({
+        responseStyle: 'data',
+        throwOnError: true,
+      });
+      setUsers((data as UserResponse[]) ?? []);
+    } catch (err) {
+      if (err instanceof Error) {
+        setUsersError(err.message);
+      } else {
+        setUsersError('Ошибка загрузки пользователей');
+      }
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (username: string) => {
+    setUsersLoading(true);
+    setUsersError(null);
+    try {
+      await deleteUserAuthUsersUsernameDelete({
+        path: { username },
+        responseStyle: 'data',
+        throwOnError: true,
+      });
+      await fetchUsers();
+    } catch (err) {
+      if (err instanceof Error) {
+        setUsersError(err.message);
+      } else {
+        setUsersError('Ошибка удаления пользователя');
+      }
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!authToken) {
+      return;
+    }
+    if (activeTab === 'history') {
+      fetchHistory();
+    }
+    if (activeTab === 'stats') {
+      fetchStats();
+    }
+    if (activeTab === 'users' && isAdmin) {
+      fetchUsers();
+    }
+  }, [activeTab, authToken, isAdmin]);
 
   const updateStudyFiles = (index: number, files: File[]) => {
     setStudies((prev) => prev.map((study, i) => (i === index ? { ...study, files } : study)));
@@ -290,150 +437,92 @@ function App() {
 
       {authToken ? (
         <>
-          {authUser === 'admin' && (
-            <CreateUserForm
-              username={newUsername}
-              password={newPassword}
-              loading={createUserLoading}
-              error={createUserError}
-              success={createUserSuccess}
-              onSubmit={handleCreateUser}
-              onUsernameChange={setNewUsername}
-              onPasswordChange={setNewPassword}
+          <div className="tabs">
+            {(isAdmin
+              ? [
+                { id: 'history', label: 'История' },
+                { id: 'users', label: 'Пользователи' },
+                { id: 'stats', label: 'Статистика' },
+                { id: 'predictions', label: 'Предсказания' },
+              ]
+              : [
+                { id: 'history', label: 'История' },
+                { id: 'stats', label: 'Статистика' },
+                { id: 'predictions', label: 'Предсказания' },
+              ]
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`tab-button ${activeTab === tab.id ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab.id as typeof activeTab)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {activeTab === 'history' && (
+            <HistoryTab
+              items={historyItems}
+              loading={historyLoading}
+              error={historyError}
+              isAdmin={isAdmin}
+              onRefresh={fetchHistory}
+              onDelete={handleDeleteHistory}
             />
           )}
 
-          <SingleUploadForm
-            singleFile={singleFile}
-            loading={loading}
-            debug={debug}
-            onSubmit={handleSingleSubmit}
-            onFileChange={handleSingleFileChange}
-            onDebugChange={setDebug}
-          />
+          {activeTab === 'users' && isAdmin && (
+            <UsersTab
+              username={newUsername}
+              password={newPassword}
+              createLoading={createUserLoading}
+              createError={createUserError}
+              createSuccess={createUserSuccess}
+              onCreateSubmit={handleCreateUser}
+              onUsernameChange={setNewUsername}
+              onPasswordChange={setNewPassword}
+              users={users}
+              usersLoading={usersLoading}
+              usersError={usersError}
+              onRefreshUsers={fetchUsers}
+              onDeleteUser={handleDeleteUser}
+            />
+          )}
 
-          <StudyUploadForm
-            studies={studies}
-            loading={loading}
-            debug={debug}
-            onSubmit={handleStudySubmit}
-            onStudyNameChange={updateStudyName}
-            onStudyFilesChange={updateStudyFiles}
-            onAddStudy={addStudy}
-            onRemoveStudy={removeStudy}
-            onDebugChange={setDebug}
-          />
+          {activeTab === 'stats' && (
+            <StatsTab
+              data={statsData}
+              loading={statsLoading}
+              error={statsError}
+              onRefresh={fetchStats}
+            />
+          )}
+
+          {activeTab === 'predictions' && (
+            <PredictionsTab
+              singleFile={singleFile}
+              loading={loading}
+              debug={debug}
+              onSingleSubmit={handleSingleSubmit}
+              onSingleFileChange={handleSingleFileChange}
+              onDebugChange={setDebug}
+              studies={studies}
+              onStudySubmit={handleStudySubmit}
+              onStudyNameChange={updateStudyName}
+              onStudyFilesChange={updateStudyFiles}
+              onAddStudy={addStudy}
+              onRemoveStudy={removeStudy}
+              error={error}
+              predictionSingle={predictionSingle}
+              predictionMultiple={predictionMultiple}
+            />
+          )}
         </>
       ) : (
         <div className="auth-hint">
           Войдите, чтобы отправлять изображения на анализ.
-        </div>
-      )}
-
-      {error && <div style={{ color: 'red', marginTop: '10px' }}>{error}</div>}
-
-      {predictionSingle && (
-        <div className="result-block">
-          <h2>Результат анализа:</h2>
-          <div className="results-grid">
-            <div className="result-card">
-              <div className="result-item">
-                <strong>Файл:</strong> {predictionSingle.filename ?? '—'}
-              </div>
-              <div className="result-item">
-                <strong>Prediction:</strong> {String(predictionSingle.prediction ?? '—')}
-              </div>
-              <div className="result-item">
-                <strong>Confidence:</strong>{' '}
-                {predictionSingle.confidence != null ? predictionSingle.confidence.toFixed(4) : '—'}
-              </div>
-              <div className="result-item">
-                <strong>Image:</strong>
-                <img
-                  className="result-image"
-                  src={predictionSingle.image_base64}
-                  alt="Result"
-                />
-              </div>
-              {predictionSingle.debug && (
-                <>
-                  <div className="result-item">
-                    <strong>Processed image:</strong>
-                    <img
-                      className="result-image"
-                      src={predictionSingle.debug.processed_image}
-                      alt="Processed"
-                    />
-                  </div>
-                  {predictionSingle.debug.hog_image && (
-                    <div className="result-item">
-                      <strong>HOG image:</strong>
-                      <img
-                        className="result-image"
-                        src={predictionSingle.debug.hog_image}
-                        alt="HOG"
-                      />
-                    </div>
-                  )}
-                  <div className="result-item">
-                    <strong>HOG vector:</strong>
-                    <pre className="hog-output">{JSON.stringify(predictionSingle.debug.hog, null, 2)}</pre>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {predictionMultiple && (
-        <div className="result-block">
-          <h2>Результат анализа:</h2>
-          <div className="results-grid">
-            {predictionMultiple.map((item) => (
-              <div className="result-card" key={item.study_id}>
-                <div className="result-item">
-                  <strong>Study:</strong> {studies.find((study) => study.id === item.study_id)?.name ?? item.study_id}
-                </div>
-                <div className="result-item">
-                  <strong>Файлы:</strong> {item.filenames.join(', ') || '—'}
-                </div>
-                <div className="result-item">
-                  <strong>Prediction:</strong> {String(item.prediction ?? '—')}
-                </div>
-                <div className="result-item">
-                  <strong>Confidence:</strong>{' '}
-                  {item.confidence != null ? item.confidence.toFixed(4) : '—'}
-                </div>
-                {item.debug && (
-                  <>
-                    <div className="result-item">
-                      <strong>Processed image:</strong>
-                      <img
-                        className="result-image"
-                        src={item.debug.processed_image}
-                        alt="Processed"
-                      />
-                    </div>
-                    {item.debug.hog_image && (
-                      <div className="result-item">
-                        <strong>HOG image:</strong>
-                        <img
-                          className="result-image"
-                          src={item.debug.hog_image}
-                          alt="HOG"
-                        />
-                      </div>
-                    )}
-                    <div className="result-item">
-                      <strong>HOG vector:</strong>
-                      <pre className="hog-output">{JSON.stringify(item.debug.hog, null, 2)}</pre>
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
         </div>
       )}
     </div>

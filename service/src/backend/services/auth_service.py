@@ -97,6 +97,17 @@ class AuthService:
         pwd_hash = get_hash(password)
         self.repo.create_user("admin", pwd_hash, role="admin")
 
+    def list_users(self) -> list[dict]:
+        users = self.repo.list_users()
+        return [{"username": user.username, "role": user.role} for user in users]
+
+    def delete_user(self, username: str) -> None:
+        if username == "admin":
+            raise HTTPException(status_code=400, detail="Cannot delete admin user")
+        deleted = self.repo.delete_user(username)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="User not found")
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):

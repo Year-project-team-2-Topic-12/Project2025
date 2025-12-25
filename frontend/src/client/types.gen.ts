@@ -73,6 +73,26 @@ export type DebugPayload = {
 };
 
 /**
+ * DeleteHistoryResponse
+ */
+export type DeleteHistoryResponse = {
+    /**
+     * Message
+     */
+    message: string;
+};
+
+/**
+ * DeleteUserResponse
+ */
+export type DeleteUserResponse = {
+    /**
+     * Message
+     */
+    message: string;
+};
+
+/**
  * ForwardImageResponse
  */
 export type ForwardImageResponse = {
@@ -106,6 +126,24 @@ export type HttpValidationError = {
 };
 
 /**
+ * ImageStats
+ */
+export type ImageStats = {
+    /**
+     * Mean Width
+     */
+    mean_width: number;
+    /**
+     * Mean Height
+     */
+    mean_height: number;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
  * PredictionResponse
  */
 export type PredictionResponse = {
@@ -129,6 +167,28 @@ export type PredictionResponse = {
 };
 
 /**
+ * ProcessingTimeStats
+ */
+export type ProcessingTimeStats = {
+    /**
+     * Mean Ms
+     */
+    mean_ms: number;
+    /**
+     * P50 Ms
+     */
+    p50_ms: number;
+    /**
+     * P95 Ms
+     */
+    p95_ms: number;
+    /**
+     * P99 Ms
+     */
+    p99_ms: number;
+};
+
+/**
  * RegisterRequest
  */
 export type RegisterRequest = {
@@ -140,6 +200,86 @@ export type RegisterRequest = {
      * Password
      */
     password: string;
+};
+
+/**
+ * RegisterResponse
+ */
+export type RegisterResponse = {
+    /**
+     * Username
+     */
+    username: string;
+    /**
+     * Role
+     */
+    role: string;
+};
+
+/**
+ * RequestLogEntry
+ */
+export type RequestLogEntry = {
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Timestamp
+     */
+    timestamp: string;
+    /**
+     * Input Meta
+     */
+    input_meta?: string | null;
+    /**
+     * Duration
+     */
+    duration?: number | null;
+    /**
+     * Result
+     */
+    result?: string | null;
+    /**
+     * Status
+     */
+    status?: number | null;
+};
+
+/**
+ * StatsResponse
+ */
+export type StatsResponse = {
+    processing_time: ProcessingTimeStats;
+    image_stats: ImageStats;
+};
+
+/**
+ * TokenResponse
+ */
+export type TokenResponse = {
+    /**
+     * Access Token
+     */
+    access_token: string;
+    /**
+     * Token Type
+     */
+    token_type: string;
+};
+
+/**
+ * UserResponse
+ */
+export type UserResponse = {
+    /**
+     * Username
+     */
+    username: string;
+    /**
+     * Role
+     */
+    role: string;
 };
 
 /**
@@ -180,8 +320,10 @@ export type LoginAuthLoginPostResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: TokenResponse;
 };
+
+export type LoginAuthLoginPostResponse = LoginAuthLoginPostResponses[keyof LoginAuthLoginPostResponses];
 
 export type RegisterAuthRegisterPostData = {
     body: RegisterRequest;
@@ -209,8 +351,58 @@ export type RegisterAuthRegisterPostResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: RegisterResponse;
 };
+
+export type RegisterAuthRegisterPostResponse = RegisterAuthRegisterPostResponses[keyof RegisterAuthRegisterPostResponses];
+
+export type ListUsersAuthUsersGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/auth/users';
+};
+
+export type ListUsersAuthUsersGetResponses = {
+    /**
+     * Response List Users Auth Users Get
+     *
+     * Successful Response
+     */
+    200: Array<UserResponse>;
+};
+
+export type ListUsersAuthUsersGetResponse = ListUsersAuthUsersGetResponses[keyof ListUsersAuthUsersGetResponses];
+
+export type DeleteUserAuthUsersUsernameDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Username
+         */
+        username: string;
+    };
+    query?: never;
+    url: '/auth/users/{username}';
+};
+
+export type DeleteUserAuthUsersUsernameDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteUserAuthUsersUsernameDeleteError = DeleteUserAuthUsersUsernameDeleteErrors[keyof DeleteUserAuthUsersUsernameDeleteErrors];
+
+export type DeleteUserAuthUsersUsernameDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    200: DeleteUserResponse;
+};
+
+export type DeleteUserAuthUsersUsernameDeleteResponse = DeleteUserAuthUsersUsernameDeleteResponses[keyof DeleteUserAuthUsersUsernameDeleteResponses];
 
 export type DeleteHistoryHistoryDeleteData = {
     body?: never;
@@ -223,8 +415,10 @@ export type DeleteHistoryHistoryDeleteResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: DeleteHistoryResponse;
 };
+
+export type DeleteHistoryHistoryDeleteResponse = DeleteHistoryHistoryDeleteResponses[keyof DeleteHistoryHistoryDeleteResponses];
 
 export type ReadHistoryHistoryGetData = {
     body?: never;
@@ -235,10 +429,14 @@ export type ReadHistoryHistoryGetData = {
 
 export type ReadHistoryHistoryGetResponses = {
     /**
+     * Response Read History History Get
+     *
      * Successful Response
      */
-    200: unknown;
+    200: Array<RequestLogEntry>;
 };
+
+export type ReadHistoryHistoryGetResponse = ReadHistoryHistoryGetResponses[keyof ReadHistoryHistoryGetResponses];
 
 export type GetStatsStatsGetData = {
     body?: never;
@@ -251,8 +449,10 @@ export type GetStatsStatsGetResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: StatsResponse;
 };
+
+export type GetStatsStatsGetResponse = GetStatsStatsGetResponses[keyof GetStatsStatsGetResponses];
 
 export type ForwardForwardPostData = {
     body: BodyForwardForwardPost;
@@ -263,12 +463,7 @@ export type ForwardForwardPostData = {
         'X-Debug'?: boolean;
     };
     path?: never;
-    query?: {
-        /**
-         * As Gray
-         */
-        as_gray?: unknown;
-    };
+    query?: never;
     url: '/forward';
 };
 
@@ -303,12 +498,7 @@ export type ForwardMultipleForwardMultiplePostData = {
         'X-Debug'?: boolean;
     };
     path?: never;
-    query?: {
-        /**
-         * As Gray
-         */
-        as_gray?: unknown;
-    };
+    query?: never;
     url: '/forwardMultiple';
 };
 

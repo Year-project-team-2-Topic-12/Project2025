@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends
 import numpy as np
 
 from backend.deps import get_request_logging_service
+from backend.schemas.stats_schema import StatsResponse
 from backend.services.request_logging_service import RequestLoggingService
 
 router = APIRouter()
 
-@router.get("/stats")
+@router.get("/stats", response_model=StatsResponse)
 def get_stats(
     logging_service: RequestLoggingService = Depends(get_request_logging_service),
 ):

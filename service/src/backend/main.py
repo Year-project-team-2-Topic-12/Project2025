@@ -17,6 +17,7 @@ async def lifespan(_app: FastAPI):
         auth_service = AuthService(UserRepository(session))
         logging_service = RequestLoggingService(RequestLogRepository(session))
         auth_service.ensure_admin()
+        # инициализация логов для тестирования
         logging_service.seed_test_log()
     finally:
         session_gen.close()

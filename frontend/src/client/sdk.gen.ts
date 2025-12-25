@@ -2,7 +2,7 @@
 
 import { type Client, formDataBodySerializer, type Options as Options2, type TDataShape, urlSearchParamsBodySerializer } from './client';
 import { client } from './client.gen';
-import type { DeleteHistoryHistoryDeleteData, DeleteHistoryHistoryDeleteResponses, ForwardForwardPostData, ForwardForwardPostErrors, ForwardForwardPostResponses, ForwardMultipleForwardMultiplePostData, ForwardMultipleForwardMultiplePostErrors, ForwardMultipleForwardMultiplePostResponses, GetStatsStatsGetData, GetStatsStatsGetResponses, LoginAuthLoginPostData, LoginAuthLoginPostErrors, LoginAuthLoginPostResponses, ReadHistoryHistoryGetData, ReadHistoryHistoryGetResponses, RegisterAuthRegisterPostData, RegisterAuthRegisterPostErrors, RegisterAuthRegisterPostResponses } from './types.gen';
+import type { DeleteHistoryHistoryDeleteData, DeleteHistoryHistoryDeleteResponses, DeleteUserAuthUsersUsernameDeleteData, DeleteUserAuthUsersUsernameDeleteErrors, DeleteUserAuthUsersUsernameDeleteResponses, ForwardForwardPostData, ForwardForwardPostErrors, ForwardForwardPostResponses, ForwardMultipleForwardMultiplePostData, ForwardMultipleForwardMultiplePostErrors, ForwardMultipleForwardMultiplePostResponses, GetStatsStatsGetData, GetStatsStatsGetResponses, ListUsersAuthUsersGetData, ListUsersAuthUsersGetResponses, LoginAuthLoginPostData, LoginAuthLoginPostErrors, LoginAuthLoginPostResponses, ReadHistoryHistoryGetData, ReadHistoryHistoryGetResponses, RegisterAuthRegisterPostData, RegisterAuthRegisterPostErrors, RegisterAuthRegisterPostResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean> = Options2<TData, ThrowOnError> & {
     /**
@@ -44,6 +44,24 @@ export const registerAuthRegisterPost = <ThrowOnError extends boolean = false>(o
 });
 
 /**
+ * List Users
+ */
+export const listUsersAuthUsersGet = <ThrowOnError extends boolean = false>(options?: Options<ListUsersAuthUsersGetData, ThrowOnError>) => (options?.client ?? client).get<ListUsersAuthUsersGetResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/auth/users',
+    ...options
+});
+
+/**
+ * Delete User
+ */
+export const deleteUserAuthUsersUsernameDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteUserAuthUsersUsernameDeleteData, ThrowOnError>) => (options.client ?? client).delete<DeleteUserAuthUsersUsernameDeleteResponses, DeleteUserAuthUsersUsernameDeleteErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/auth/users/{username}',
+    ...options
+});
+
+/**
  * Delete History
  */
 export const deleteHistoryHistoryDelete = <ThrowOnError extends boolean = false>(options?: Options<DeleteHistoryHistoryDeleteData, ThrowOnError>) => (options?.client ?? client).delete<DeleteHistoryHistoryDeleteResponses, unknown, ThrowOnError>({
@@ -55,7 +73,11 @@ export const deleteHistoryHistoryDelete = <ThrowOnError extends boolean = false>
 /**
  * Read History
  */
-export const readHistoryHistoryGet = <ThrowOnError extends boolean = false>(options?: Options<ReadHistoryHistoryGetData, ThrowOnError>) => (options?.client ?? client).get<ReadHistoryHistoryGetResponses, unknown, ThrowOnError>({ url: '/history', ...options });
+export const readHistoryHistoryGet = <ThrowOnError extends boolean = false>(options?: Options<ReadHistoryHistoryGetData, ThrowOnError>) => (options?.client ?? client).get<ReadHistoryHistoryGetResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/history',
+    ...options
+});
 
 /**
  * Get Stats

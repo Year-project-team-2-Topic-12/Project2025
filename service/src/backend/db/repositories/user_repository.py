@@ -16,3 +16,14 @@ class UserRepository:
         self.session.commit()
         self.session.refresh(new_user)
         return new_user
+
+    def list_users(self) -> list[User]:
+        return self.session.query(User).order_by(User.username).all()
+
+    def delete_user(self, username: str) -> bool:
+        user = self.session.query(User).filter(User.username == username).first()
+        if not user:
+            return False
+        self.session.delete(user)
+        self.session.commit()
+        return True
