@@ -6,14 +6,13 @@ from ..schemas.inference_schema import ForwardImageResponse, DebugPayload, Predi
 from ml.hog_predictor import HogPredictor
 from ml.preprocessing import resize_with_padding_cv2, enhance_brightness_cv2
 from ml.hog import compute_hog_with_visualization
-from fastapi import Depends, UploadFile
+from fastapi import UploadFile
 import cv2
 import numpy as np
 
 
-
 class InferenceService:
-    def __init__(self, as_gray=True, predictor_multiple: HogPredictor=Depends(get_hog_predictor_multiple), predictor_single: HogPredictor=Depends(get_hog_predictor)):
+    def __init__(self, predictor_multiple: HogPredictor, predictor_single: HogPredictor, as_gray=True):
         self.as_gray = as_gray
         self.predictor_multiple = predictor_multiple
         self.predictor_single = predictor_single

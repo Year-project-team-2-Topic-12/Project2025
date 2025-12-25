@@ -1,5 +1,3 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
+from backend.db.repository import engine
 
-DATABASE_URL = "sqlite:///./history.db"
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+__all__ = ["engine"]

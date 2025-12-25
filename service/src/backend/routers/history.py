@@ -1,33 +1,30 @@
-from fastapi import APIRouter, HTTPException, Depends
-from ..database import engine
-from backend import crud
-from sqlalchemy.orm import Session as OrmSession
+from fastapi import APIRouter, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+from backend.deps import get_auth_service, get_request_logging_service
+from backend.services.auth_service import AuthService
+from backend.services.request_logging_service import RequestLoggingService
 
 security = HTTPBearer()
 router = APIRouter()
 
+
 @router.get("/history")
-def read_history():
-    with OrmSession(engine) as session:
-        logs = crud.get_all_logs(session)
-    return [
-        {
-            "id": log.id,
-            "timestamp": log.timestamp,
-            "input_meta" : log.input_meta,
-            "duration": log.duration,
-            "result": log.result,
-            "status": log.status,
-        }
-        for log in logs
-    ]
+def read_history(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    auth_service: AuthService = Depends(get_auth_service),
+    logging_service: RequestLoggingService = Depends(get_request_logging_service),
+):
+    auth_service.require_admin(credentials)
+    return logging_service.get_history()
+
 
 @router.delete("/history")
-def delete_history(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    token = credentials.credentials
-    if token != "secret_token":
-        raise HTTPException(status_code=403, detail="Unauthorized")
-    with OrmSession(engine) as session:
-        crud.delete_all_logs(session)
+def delete_history(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    auth_service: AuthService = Depends(get_auth_service),
+    logging_service: RequestLoggingService = Depends(get_request_logging_service),
+):
+    auth_service.require_admin(credentials)
+    logging_service.delete_history()
     return {"message": "История удалена"}

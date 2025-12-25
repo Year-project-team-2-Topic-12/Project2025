@@ -5,6 +5,7 @@ from fastapi import UploadFile, Depends
 from typing import Callable
 
 from ..services.inference_service import InferenceService
+from ..deps import get_inference_service
 from ..schemas.inference_schema import ForwardImageResponse, PredictionResponse
 
 router = APIRouter()
@@ -36,7 +37,7 @@ async def forward(
     request: Request,
     image: UploadFile = File(..., alias="image"), 
     debug: bool = Header(False, alias="X-Debug"),
-    service: InferenceService = Depends(InferenceService),
+    service: InferenceService = Depends(get_inference_service),
 ):
     validate_content_type(request)
     validate_image_upload(image)
@@ -48,7 +49,7 @@ def forward_multiple(
     images: list[UploadFile] = File(..., alias="images"), 
     study_ids: str = Header(..., alias="X-Study-Ids"),
     debug: bool = Header(False, alias="X-Debug"),
-    service: InferenceService = Depends(InferenceService),
+    service: InferenceService = Depends(get_inference_service),
 ):
     validate_content_type(request)
 

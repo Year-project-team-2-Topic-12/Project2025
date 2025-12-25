@@ -1,19 +1,19 @@
-from backend.database import engine
-from sqlalchemy.orm import Session
-from backend import crud
-from backend import security
-from ml import env
+from backend.db.connection import get_session
+from backend.db.repositories.user_repository import UserRepository
+from backend.services.auth_service import AuthService
 
 
-def ensure_admin():
+def main() -> None:
     print("Проверяем администратора...")
-    with Session(engine) as db:
-        if crud.get_user_by_username(db, "admin"):
-            print("Админ уже существует")
-            return
+    session_gen = get_session()
+    session = next(session_gen)
+    try:
+        auth_service = AuthService(UserRepository(session))
+        auth_service.ensure_admin()
+    finally:
+        session_gen.close()
+    print("Проверка завершена")
 
-        password = env.ADMIN_PASSWORD
-        print(f"Создаём админа с паролем из переменных окружения: {password}")
-        pwd_hash = security.get_hash(password)
-        crud.create_user(db, "admin", pwd_hash, role="admin")
-        print("Админ создан! (admin / заданный пароль)")
+
+if __name__ == "__main__":
+    main()

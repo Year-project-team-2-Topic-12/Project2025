@@ -1,5 +1,13 @@
 from __future__ import annotations
 from functools import lru_cache
+from fastapi import Depends
+from sqlalchemy.orm import Session
+
+from backend.db.connection import get_session
+from backend.db.repositories.user_repository import UserRepository
+from backend.db.repositories.request_log_repository import RequestLogRepository
+from backend.services.auth_service import AuthService
+from backend.services.request_logging_service import RequestLoggingService
 
 
 @lru_cache(maxsize=1)
@@ -13,6 +21,28 @@ def get_hog_predictor_multiple() -> 'HogPredictor':
     return HogPredictor()
 
 @lru_cache(maxsize=1)
-def get_inference_service() -> 'InferenceService':
+def get_inference_service(hog_predictor_multiple = Depends(get_hog_predictor_multiple), hog_predictor_single=Depends(get_hog_predictor)) -> 'InferenceService':
     from .services.inference_service import InferenceService
-    return InferenceService()
+    return InferenceService(predictor_multiple=hog_predictor_multiple, predictor_single=hog_predictor_single)
+
+
+def get_user_repository(session: Session = Depends(get_session)) -> UserRepository:
+    return UserRepository(session)
+
+
+def get_request_log_repository(
+    session: Session = Depends(get_session),
+) -> RequestLogRepository:
+    return RequestLogRepository(session)
+
+
+def get_auth_service(
+    repo: UserRepository = Depends(get_user_repository),
+) -> AuthService:
+    return AuthService(repo)
+
+
+def get_request_logging_service(
+    repo: RequestLogRepository = Depends(get_request_log_repository),
+) -> RequestLoggingService:
+    return RequestLoggingService(repo)

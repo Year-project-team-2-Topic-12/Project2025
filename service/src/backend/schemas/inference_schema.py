@@ -15,11 +15,6 @@ class PredictionResponse(BaseSchema):
     confidence: Optional[float] = None
     debug: Optional[DebugPayload] = None
 
-
-class ForwardJsonResponse(BaseSchema):
-    result: dict[str, Any]
-
-
 class ForwardImageResponse(BaseSchema):
     filename: Optional[str] = None
     prediction: Optional[Union[str, int, float]] = None

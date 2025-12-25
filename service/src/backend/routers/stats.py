@@ -1,15 +1,16 @@
-from fastapi import APIRouter
-from backend.database import engine
-from sqlalchemy.orm import Session as OrmSession
-from backend import crud
+from fastapi import APIRouter, Depends
 import numpy as np
+
+from backend.deps import get_request_logging_service
+from backend.services.request_logging_service import RequestLoggingService
 
 router = APIRouter()
 
 @router.get("/stats")
-def get_stats():
-    with OrmSession(engine) as session:
-        logs = crud.get_successful_logs(session)
+def get_stats(
+    logging_service: RequestLoggingService = Depends(get_request_logging_service),
+):
+    logs = logging_service.get_successful_logs_for_stats()
     
     if not logs:
         return {
