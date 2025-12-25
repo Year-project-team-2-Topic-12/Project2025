@@ -1,14 +1,12 @@
 import base64
 from typing import Any
 
-from ..deps import get_hog_predictor, get_hog_predictor_multiple
 from ..schemas.inference_schema import ForwardImageResponse, DebugPayload, PredictionResponse
 from ml.hog_predictor import HogPredictor
 from ml.preprocessing import resize_with_padding_cv2, enhance_brightness_cv2
 from ml.hog import compute_hog_with_visualization
 from fastapi import UploadFile
 import cv2
-import numpy as np
 from .request_logging_service import RequestLoggingService
 import numpy as np
 import time
