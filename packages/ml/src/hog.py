@@ -5,7 +5,7 @@ from skimage.feature import hog
 import pandas as pd
 from .data import get_data_path
 from tqdm import tqdm
-from typing import Sequence, Any
+from typing import Sequence
 import glob
 import os
 import logging
