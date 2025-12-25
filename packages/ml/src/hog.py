@@ -8,8 +8,11 @@ from tqdm import tqdm
 from typing import Sequence, Any
 import glob
 import os
+import logging
 
 from sklearn.base import BaseEstimator, TransformerMixin
+
+logger = logging.getLogger(__name__)
 
 def get_hog_anatomy_filename(anatomy, is_images=False):
     suffix = "_images" if is_images else ""
@@ -54,7 +57,7 @@ def compute_images_hog(
     return study_feat
 
 def compute_study_hog(df_subset, as_gray=True, is_images=False):
-        print('updated 1')
+        logger.debug("compute_study_hog called")
         X_feats = []
         y_labels = []
         study_ids = []
@@ -89,7 +92,7 @@ def compute_study_hog(df_subset, as_gray=True, is_images=False):
 
 
 def create_andor_return_hog_data(images_df: pd.DataFrame, anatomy: str, is_images=False) -> np.ndarray:
-    print("\nОбработка анатомии:", anatomy)
+    logger.info("Обработка анатомии: %s", anatomy)
     hog_filepath = get_data_path(get_hog_anatomy_filename(anatomy, is_images=is_images))
     try:
         data = np.load(hog_filepath, allow_pickle=True)

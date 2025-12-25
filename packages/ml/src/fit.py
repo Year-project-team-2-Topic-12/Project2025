@@ -6,8 +6,11 @@ import pandas as pd
 from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 import time
+import logging
 
 ArrayLike = np.ndarray | pd.Series | pd.DataFrame
+
+logger = logging.getLogger(__name__)
 
 class GetDataFunction(Protocol):
     def __call__(
@@ -63,15 +66,15 @@ def fit_pipeline_anatomies(
     # models = []
     results_df = load_model_results(model_name_base, use_all=use_all)
     if results_df is not None:
-        print(f"Загружены результаты модели {model_name_base} из файла.")
+        logger.info("Загружены результаты модели %s из файла.", model_name_base)
         return results_df
 
     def train_model_for_anatomy(X_train: np.array, y_train: np.array, X_val: np.array, y_val: np.array, anatomy: str | None = None):
-        print(f"\nОбработка анатомии: {anatomy if anatomy else 'ALL'}")
+        logger.info("Обработка анатомии: %s", anatomy if anatomy else "ALL")
         if not(grid_search := load_model_pipeline(model_name_base, anatomy=anatomy)):
-            print(f"Нет сохранённой - обучаем модель {model_name_base} для анатомии {anatomy}")
-            print("len X_train:", len(X_train))
-            print("len X_val:", len(X_val))
+            logger.info("Нет сохранённой - обучаем модель %s для анатомии %s", model_name_base, anatomy)
+            logger.debug("len X_train: %s", len(X_train))
+            logger.debug("len X_val: %s", len(X_val))
             grid_params = {
                 'param_grid': param_grid, 'scoring': kappa_scorer, 'cv': 5, 'n_jobs': -1, **grid_search_params
             }
@@ -80,16 +83,16 @@ def fit_pipeline_anatomies(
             grid_search.fit(X_train, y_train)
             fit_time = time.time() - start_time
             save_model_pipeline(grid_search, model_name_base, anatomy=anatomy)
-            print("Время обучения grid search (сек):", fit_time)
+            logger.info("Время обучения grid search (сек): %s", fit_time)
         else:
-            print(f"Загружена сохранённая модель {model_name_base} для анатомии {anatomy}")
+            logger.info("Загружена сохранённая модель %s для анатомии %s", model_name_base, anatomy)
         best_model = grid_search.best_estimator_
-        print("Best params:", grid_search.best_params_)
+        logger.info("Best params: %s", grid_search.best_params_)
         best_idx = grid_search.best_index_
         fit_time_best = grid_search.cv_results_["mean_fit_time"][best_idx]
         fit_time_best_std = grid_search.cv_results_["std_fit_time"][best_idx]
-        print("Mean fit time:", fit_time_best)
-        print("Std fit time:", fit_time_best_std)
+        logger.info("Mean fit time: %s", fit_time_best)
+        logger.info("Std fit time: %s", fit_time_best_std)
         y_pred_train = best_model.predict(X_train)
         y_pred_val = best_model.predict(X_val)
         if use_decision_function:
@@ -124,15 +127,15 @@ def fit_pipeline_anatomies(
     param_images = {'is_images': is_images} if is_images is not None else {}
 
     if use_all:
-        print(f"Обучаем модель {model_name_base} по всему датасету")
+        logger.info("Обучаем модель %s по всему датасету", model_name_base)
         X_train, y_train, X_val, y_val = get_data_for_anatomy(paths_df, "ALL_anatomies", get_all=True, **param_images)
         train_model_for_anatomy(X_train, y_train, X_val, y_val)
     else:
-        print(f"Обучаем модель {model_name_base} по анатомиям")
+        logger.info("Обучаем модель %s по анатомиям", model_name_base)
         for anatomy in paths_df['anatomy'].unique():
             if only_anatomy and anatomy != only_anatomy:
                 continue
-            print(f"Обучаем модель по анатомии {anatomy}")
+            logger.info("Обучаем модель по анатомии %s", anatomy)
             X_train, y_train, X_val, y_val = get_data_for_anatomy(paths_df, anatomy, **param_images)
             train_model_for_anatomy(X_train, y_train, X_val, y_val, anatomy=anatomy)
 
@@ -146,12 +149,24 @@ def print_return_metrics(y_train, y_pred_train, y_val, y_pred_val, y_pred_train_
     f1 = f1_score(y_train, y_pred_train, pos_label=1, zero_division=0)
     kappa = cohen_kappa_score(y_train, y_pred_train)
     roc_auc_train = roc_auc_score(y_train, y_pred_train_decfun)
-    print(f"TRAIN METRICS: Accuracy={acc:.3f}, F1_Abnormal={f1:.3f}, Cohen_Kappa={kappa:.3f}, ROC_AUC={roc_auc_train:.3f}")
+    logger.info(
+        "TRAIN METRICS: Accuracy=%.3f, F1_Abnormal=%.3f, Cohen_Kappa=%.3f, ROC_AUC=%.3f",
+        acc,
+        f1,
+        kappa,
+        roc_auc_train,
+    )
     train_data = {'accuracy': acc, 'f1': f1, 'kappa': kappa, 'roc_auc': roc_auc_train}
     acc = accuracy_score(y_val, y_pred_val)
     f1 = f1_score(y_val, y_pred_val, pos_label=1, zero_division=0)
     kappa = cohen_kappa_score(y_val, y_pred_val)
     roc_auc_val = roc_auc_score(y_val, y_pred_val_decfun)
-    print(f"VALID METRICS: Accuracy={acc:.3f}, F1_Abnormal={f1:.3f}, Cohen_Kappa={kappa:.3f}, ROC_AUC={roc_auc_val:.3f}")
+    logger.info(
+        "VALID METRICS: Accuracy=%.3f, F1_Abnormal=%.3f, Cohen_Kappa=%.3f, ROC_AUC=%.3f",
+        acc,
+        f1,
+        kappa,
+        roc_auc_val,
+    )
     valid_data = {'accuracy': acc, 'f1': f1, 'kappa': kappa, 'roc_auc': roc_auc_val}
     return {'train': train_data, 'valid': valid_data}

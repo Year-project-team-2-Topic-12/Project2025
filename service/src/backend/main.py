@@ -1,13 +1,18 @@
 from fastapi import FastAPI
+import logging
 from backend.routers import history, inference, stats, auth
 from backend.db.connection import get_session
 from backend.db.repositories.user_repository import UserRepository
 from backend.services.auth_service import AuthMiddleware, AuthService
 from contextlib import asynccontextmanager
+from ml.log import configure_logging
+
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    print("Запуск приложения...")
+    configure_logging()
+    logger.info("Запуск приложения...")
     session_gen = get_session()
     session = next(session_gen)
     try:
@@ -16,7 +21,7 @@ async def lifespan(_app: FastAPI):
     finally:
         session_gen.close()
     yield
-    print("Завершение приложения...")
+    logger.info("Завершение приложения...")
 
 app = FastAPI(
     title="MURA Classifier API",

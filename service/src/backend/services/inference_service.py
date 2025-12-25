@@ -12,6 +12,9 @@ import numpy as np
 from .request_logging_service import RequestLoggingService
 import numpy as np
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 def measure_inference_time_decorator(func):
     def wrapper(self: 'InferenceService', *args, **kwargs):
@@ -72,7 +75,7 @@ class InferenceService:
         )
 
         self.stat_image_height, self.stat_image_width = image.shape[:2]
-        print(f"Image shape for stats: {self.stat_image_height}x{self.stat_image_width}")
+        logger.debug("Image shape for stats: %sx%s", self.stat_image_height, self.stat_image_width)
 
         if debug:
             response.debug = DebugPayload(
@@ -118,7 +121,7 @@ class InferenceService:
             processed_images_studies.append(processed_image)
             hog_images_studies.append(hog_image)
         avg_height, avg_width = int(np.mean([size[0] for size in image_sizes])), int(np.mean([size[1] for size in image_sizes]))
-        print(f"Average processed image size across studies: {avg_height}x{avg_width}")
+        logger.debug("Average processed image size across studies: %sx%s", avg_height, avg_width)
         self.stat_image_height = avg_height
         self.stat_image_width = avg_width
 
@@ -126,8 +129,8 @@ class InferenceService:
         for idx, study_id in enumerate(study_order):
             hog_vector = hog_vectors_studies[idx]
             processed_image = processed_images_studies[idx]
-            print("len processed images studies", np.array(processed_images_studies).shape)
-            print("hog vector shape", np.array(hog_vectors_studies).shape)
+            logger.debug("len processed images studies %s", np.array(processed_images_studies).shape)
+            logger.debug("hog vector shape %s", np.array(hog_vectors_studies).shape)
             hog_image = hog_images_studies[idx]
             filenames = [upload.filename for upload in studies[study_id] if upload.filename]
             prediction_value = prediction[idx]
@@ -167,7 +170,7 @@ class InferenceService:
             enhanced = enhance_brightness_cv2(image)
             resized = resize_with_padding_cv2(enhanced)
             processed_images.append(resized)
-            print("Processed image shape:", resized.shape)
+            logger.debug("Processed image shape: %s", resized.shape)
 
         hog_vector, hog_image = compute_hog_with_visualization(np.array(processed_images))
         if return_image:

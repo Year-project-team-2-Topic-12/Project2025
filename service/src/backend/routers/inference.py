@@ -3,12 +3,14 @@ import traceback
 from fastapi import APIRouter, HTTPException, File, Header, Request
 from fastapi import UploadFile, Depends
 from typing import Callable
+import logging
 
 from ..services.inference_service import InferenceService
 from ..deps import get_inference_service
 from ..schemas.inference_schema import ForwardImageResponse, PredictionResponse
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 def validate_image_upload(upload: UploadFile) -> None:
     if not upload.content_type or not upload.content_type.startswith("image/"):
@@ -28,7 +30,7 @@ def run_prediction(executable: Callable):
     try:
         return executable()
     except Exception as e:
-        print(f"Ошибка при выполнении предсказания: {e}")
+        logger.exception("Ошибка при выполнении предсказания: %s", e)
         print_error_fulltraceback(e)
         raise HTTPException(status_code=403, detail="модель не смогла обработать данные")
 

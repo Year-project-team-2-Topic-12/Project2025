@@ -1,10 +1,13 @@
 from backend.db.connection import get_session
 from backend.db.repositories.user_repository import UserRepository
 from backend.services.auth_service import AuthService
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    print("Проверяем администратора...")
+    logger.info("Проверяем, что пользователь admin создан...")
     session_gen = get_session()
     session = next(session_gen)
     try:
@@ -12,7 +15,7 @@ def main() -> None:
         auth_service.ensure_admin()
     finally:
         session_gen.close()
-    print("Проверка завершена")
+    logger.info("Проверка завершена")
 
 
 if __name__ == "__main__":

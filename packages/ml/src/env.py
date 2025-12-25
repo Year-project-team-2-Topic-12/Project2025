@@ -19,3 +19,5 @@ DATA_ROOT = os.path.join(ROOT_DIR, os.getenv('DATA_ROOT', 'MURA-v1.1-resized-224
 IMAGE_SIZE = int(os.getenv('IMAGE_SIZE', '224'))
 SELECTED_MODEL = os.getenv('SELECTED_MODEL', 'hog_pca_poly_logreg')
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin')
+LOGS_FILE = os.getenv('LOG_FILE', 'logs/ml_service.log')
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'DEBUG')

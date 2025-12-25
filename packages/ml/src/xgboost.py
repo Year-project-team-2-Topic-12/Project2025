@@ -8,6 +8,9 @@ from .data import get_data_path, load_pickle, save_pickle
 from scipy.stats import skew, kurtosis, entropy
 import cv2
 from sklearn.preprocessing import StandardScaler
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Параметры обработки
 IMG_SIZE = (224, 224)
@@ -89,7 +92,7 @@ def create_and_return_feature_dataset(images_df: pd.DataFrame):
     Возвращает два массива: визуальные признаки и статистические признаки.
     """
     if (loaded_data := load_pickle(get_data_path(get_dataset_filename()))) is None:
-        print(" Извлекаем HOG, LBP, GLCM и Статистику...")
+        logger.info("Извлекаем HOG, LBP, GLCM и статистику...")
         visual_data = [] # Список векторов
         stats_data = []  # Список словарей
         labels = []
@@ -104,17 +107,17 @@ def create_and_return_feature_dataset(images_df: pd.DataFrame):
                 labels.append(row['label'])
                 count += 1
             else:
-                print("Нет признаков для:", row['path'])
-        print("Успешно обработано:", count)
+                logger.warning("Нет признаков для: %s", row['path'])
+        logger.info("Успешно обработано: %s", count)
         # Преобразуем в массивы
         lengths = [len(v) for v in visual_data]
-        print("Уникальные длины визуальных векторов:", set(lengths))
+        logger.debug("Уникальные длины визуальных векторов: %s", set(lengths))
 
         X_visual = np.array(visual_data)
         df_stats = pd.DataFrame(stats_data)
         y = np.array(labels)
 
-        print(f" Размер визуальной матрицы (до PCA): {X_visual.shape}")
+        logger.info("Размер визуальной матрицы (до PCA): %s", X_visual.shape)
             # Сначала скейлинг (PCA чувствителен к масштабу)
         scaler = StandardScaler()
         X_visual_scaled = scaler.fit_transform(X_visual)
@@ -123,8 +126,11 @@ def create_and_return_feature_dataset(images_df: pd.DataFrame):
         pca = PCA(n_components=PCA_COMPONENTS, random_state=42)
         X_pca = pca.fit_transform(X_visual_scaled)
 
-        print(f" Размер после PCA: {X_pca.shape}")
-        print(f"   Объясненная дисперсия (сколько инфы сохранили): {sum(pca.explained_variance_ratio_):.2%}")
+        logger.info("Размер после PCA: %s", X_pca.shape)
+        logger.info(
+            "Объясненная дисперсия (сколько инфы сохранили): %.2f%%",
+            sum(pca.explained_variance_ratio_) * 100,
+        )
 
         # Создаем DataFrame из PCA компонент
         pca_cols = [f'pca_{i}' for i in range(PCA_COMPONENTS)]
@@ -139,11 +145,11 @@ def create_and_return_feature_dataset(images_df: pd.DataFrame):
         X_full['split'] = images_df['split'].values
         X_full['anatomy'] = images_df['anatomy'].values
 
-        print(f" Итоговый DataFrame: {X_final.shape}")
+        logger.info("Итоговый DataFrame: %s", X_final.shape)
         save_pickle(X_full, get_data_path(get_dataset_filename()))
         return X_full
     else:
-        print("Датасет признаков загружен из файла.")
+        logger.info("Датасет признаков загружен из файла.")
         return loaded_data
 
 """
@@ -161,7 +167,7 @@ def prepare_xgboost_data_for_anatomy(base_df: pd.DataFrame, anatomy: str, get_al
     y_part = part_df['label']
 
     if len(y_part.unique()) < 2:
-        print(f"{anatomy:<15} | {len(part_df):<8} | SKIPPED (1 class)")
+        logger.warning("%s | %s | SKIPPED (1 class)", f"{anatomy:<15}", f"{len(part_df):<8}")
         return [], [], [], [],
     train_mask = part_df['split'] == 'train'
     val_mask = part_df['split'] == 'valid'
