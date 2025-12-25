@@ -9,14 +9,53 @@ from ml.hog import compute_hog_with_visualization
 from fastapi import UploadFile
 import cv2
 import numpy as np
+from .request_logging_service import RequestLoggingService
+import numpy as np
+import time
 
+def measure_inference_time_decorator(func):
+    def wrapper(self: 'InferenceService', *args, **kwargs):
+            start_time = time.time()
+            status = 'Успех!'
+            result = None
+            try:
+                result = func(self, *args, **kwargs)
+            except Exception as e:
+                status = f'Ошибка {e}!'
+                raise e
+            finally:
+                end_time = time.time()
+                duration_ms = (end_time - start_time) * 1000
+                result_value = None
+                if result is not None:
+                    if hasattr(result, "prediction"):
+                        result_value = str(getattr(result, "prediction"))
+                    else:
+                        result_value = "Нет предсказания"
+                self.request_logging_service.add_inference_request(
+                    input_meta=f"Вызов {func.__name__}",
+                    image_width=self.stat_image_width,
+                    image_height=self.stat_image_height,
+                    duration=duration_ms,
+                    result=result_value,
+                    status=status,
+                )
+
+            return result
+    return wrapper
 
 class InferenceService:
-    def __init__(self, predictor_multiple: HogPredictor, predictor_single: HogPredictor, as_gray=True):
+    def __init__(self, predictor_multiple: HogPredictor, predictor_single: HogPredictor, as_gray=True, request_logging_service: RequestLoggingService = None):
         self.as_gray = as_gray
         self.predictor_multiple = predictor_multiple
         self.predictor_single = predictor_single
+        self.request_logging_service = request_logging_service
 
+        # для сервисов истории и статистики запросов
+        self.stat_image_height = None
+        self.stat_image_width = None
+
+    @measure_inference_time_decorator
     def predict_single(self, upload: UploadFile, debug: bool = False) -> ForwardImageResponse:
         image = self._read_upload_cv2_gray(upload)
         hog_vector, processed_image, hog_image = self._preprocess_study([image], return_image=True)
@@ -32,6 +71,9 @@ class InferenceService:
             image_base64=self._encode_image_base64(image),
         )
 
+        self.stat_image_height, self.stat_image_width = image.shape[:2]
+        print(f"Image shape for stats: {self.stat_image_height}x{self.stat_image_width}")
+
         if debug:
             response.debug = DebugPayload(
                 hog=hog_vector.tolist(),
@@ -41,6 +83,7 @@ class InferenceService:
 
         return response
 
+    @measure_inference_time_decorator
     def predict_studies(
         self,
         input_data: list[UploadFile],
@@ -59,12 +102,14 @@ class InferenceService:
         processed_images_studies: list[np.ndarray | None] = []
         hog_images_studies: list[np.ndarray | None] = []
         results: list[PredictionResponse] = []
+        image_sizes: list[tuple[int, int]] = []
         for study_id in study_order:
             uploads = studies[study_id]
             images: list[np.ndarray] = []
             filenames: list[str] = []
             for upload in uploads:
                 images.append(self._read_upload_cv2_gray(upload))
+                image_sizes.append(images[-1].shape[:2])
                 if upload.filename:
                     filenames.append(upload.filename)
 
@@ -72,6 +117,10 @@ class InferenceService:
             hog_vectors_studies.append(hog_vector)
             processed_images_studies.append(processed_image)
             hog_images_studies.append(hog_image)
+        avg_height, avg_width = int(np.mean([size[0] for size in image_sizes])), int(np.mean([size[1] for size in image_sizes]))
+        print(f"Average processed image size across studies: {avg_height}x{avg_width}")
+        self.stat_image_height = avg_height
+        self.stat_image_width = avg_width
 
         prediction, confidence = self.predictor_multiple.predict_with_confidence(np.array(hog_vectors_studies), is_multiple=True)
         for idx, study_id in enumerate(study_order):
@@ -136,17 +185,12 @@ class InferenceService:
         hog_u8 = cv2.normalize(hog_image, None, 0, 255, cv2.NORM_MINMAX)
         return self._encode_image_base64(hog_u8)
 
-
-    def _normalize_prediction(self, predictions: Any) -> Any:
-        if isinstance(predictions, np.ndarray):
-            return predictions.item() if predictions.size == 1 else predictions.tolist()
-        if isinstance(predictions, (list, tuple)) and len(predictions) == 1:
-            return predictions[0]
-        return predictions
+    def _normalize_prediction(self, predictions: np.ndarray) -> Any:
+        return predictions.item() if predictions.size == 1 else predictions.tolist()
 
     def _postprocess(
         self,
-        predictions: Any,
+        predictions: np.ndarray,
         *,
         confidence: float | None,
         study_id: str,

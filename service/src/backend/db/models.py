@@ -16,7 +16,7 @@ class RequestLog(Base):
     image_height = Column(Integer, nullable=True)
     duration = Column(Float)
     result = Column(String)
-    status = Column(Integer)
+    status = Column(String)
 
 
 class User(Base):

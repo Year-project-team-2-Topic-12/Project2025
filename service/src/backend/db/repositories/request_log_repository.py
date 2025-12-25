@@ -17,8 +17,8 @@ class RequestLogRepository:
         self.session.execute(RequestLog.__table__.delete())
         self.session.commit()
 
-    def add_log(self, log_data: dict) -> RequestLog:
-        log = RequestLog(**log_data)
+    def add_log(self, log_data: dict | RequestLog) -> RequestLog:
+        log = log_data if isinstance(log_data, RequestLog) else RequestLog(**log_data)
         self.session.add(log)
         self.session.commit()
         self.session.refresh(log)
