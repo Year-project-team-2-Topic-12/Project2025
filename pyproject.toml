@@ -46,7 +46,7 @@ notebooks = [
 dev = [
 ]
 [tool.setuptools]
-packages = ["backend", "backend.routers", "ml"]
+packages = ["backend", "ml"]
 package-dir = { "backend" = "service/src/backend", "ml" = "packages/ml/src" }
 [build-system]
 requires = ["setuptools>=68", "wheel"]

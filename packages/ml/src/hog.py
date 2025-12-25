@@ -11,24 +11,39 @@ import os
 
 from sklearn.base import BaseEstimator, TransformerMixin
 
-def get_hog_anatomy_filename(anatomy):
-    return f"hog_{anatomy}.npz"
+def get_hog_anatomy_filename(anatomy, is_images=False):
+    suffix = "_images" if is_images else ""
+    return f"hog_{anatomy}{suffix}.npz"
 
-def compute_hog(img: np.ndarray) -> np.ndarray:
+def compute_hog(img: np.ndarray, visualize=False) -> np.ndarray:
     return hog(
         img,
         orientations=9,
         pixels_per_cell=(8, 8),
         cells_per_block=(2, 2),
-        block_norm='L2-Hys'
+        block_norm='L2-Hys',
+        visualize=visualize,
     )
 
-def compute_files_hog(
-    files: Sequence[np.ndarray],
+def compute_hog_with_visualization(img: np.ndarray, is_multiple=False) -> tuple[np.ndarray, np.ndarray]:
+    if not is_multiple:
+        img = np.ndarray([img])
+    features_list = []
+    hog_images = []
+    for im in img:
+        features, hog_image = compute_hog(im, visualize=True)
+        features_list.append(features)
+        hog_images.append(hog_image)
+    features = np.mean(features_list, axis=0)
+    hog_image = np.mean(hog_images, axis=0)
+    return features, hog_image
+
+def compute_images_hog(
+    images: Sequence[np.ndarray],
 ) -> np.ndarray:
     hog_vecs: list[np.ndarray] = []
 
-    for file in files:
+    for file in images:
         feat = compute_hog(file)
         hog_vecs.append(feat)
 
@@ -73,14 +88,14 @@ def compute_study_hog(df_subset, as_gray=True, is_images=False):
         return X, y, study_ids, splits, anatomies
 
 
-def create_andor_return_hog_data(images_df: pd.DataFrame, anatomy: str) -> np.ndarray:
+def create_andor_return_hog_data(images_df: pd.DataFrame, anatomy: str, is_images=False) -> np.ndarray:
     print("\nОбработка анатомии:", anatomy)
-    hog_filepath = get_data_path(get_hog_anatomy_filename(anatomy))
+    hog_filepath = get_data_path(get_hog_anatomy_filename(anatomy, is_images=is_images))
     try:
         data = np.load(hog_filepath, allow_pickle=True)
     except FileNotFoundError:
         images_subset = images_df[images_df['anatomy'] == anatomy] 
-        X_all, y_all, study_ids, splits, anatomies = compute_study_hog(images_subset, is_images=False)
+        X_all, y_all, study_ids, splits, anatomies = compute_study_hog(images_subset, is_images=is_images)
         np.savez(hog_filepath, X=X_all, y=y_all, study_ids=study_ids, splits=splits, anatomy=anatomies)
     data = np.load(hog_filepath, allow_pickle=True)
     return data
@@ -171,11 +186,11 @@ class StudyHOGTransformer(BaseEstimator, TransformerMixin):
 Функция для использования в fit_pipeline_anatomies.
 Подготавливает данные для не-xgboost моделей на HOG.
 """
-def prepare_data_for_anatomy(base_df: pd.DataFrame, anatomy, get_all=False):
+def prepare_data_for_anatomy(base_df: pd.DataFrame, anatomy, get_all=False, is_images=False):
         if get_all:
             X_list, y_list, splits_list = [], [], []
             for anatomy in base_df['anatomy'].unique():
-                d = create_andor_return_hog_data(base_df, anatomy=anatomy)
+                d = create_andor_return_hog_data(base_df, anatomy=anatomy, is_images=is_images)
                 X_list.append(d["X"])
                 y_list.append(d["y"])
                 splits_list.append(d["splits"])
@@ -185,7 +200,7 @@ def prepare_data_for_anatomy(base_df: pd.DataFrame, anatomy, get_all=False):
                 "splits": np.concatenate(splits_list),
             }
         else:
-            data = create_andor_return_hog_data(base_df, anatomy=anatomy)
+            data = create_andor_return_hog_data(base_df, anatomy=anatomy, is_images=is_images)
         X = data['X']
         y = data['y']
         splits = data['splits']
@@ -195,4 +210,3 @@ def prepare_data_for_anatomy(base_df: pd.DataFrame, anatomy, get_all=False):
         X_val = X[np.array(splits) == 'valid']
         y_val = y[np.array(splits) == 'valid']
         return X_train, y_train, X_val, y_val
-

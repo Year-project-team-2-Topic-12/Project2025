@@ -5,7 +5,8 @@ from backend import security
 app = FastAPI(
     title="MURA Classifier API",
     description="API для хранения и просмотра истории запросов",
-    version="1.0.0"
+    version="1.0.0",
+    servers=[{"url": ""}]
 )
 
 # Подключения Middleware
