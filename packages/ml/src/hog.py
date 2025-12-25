@@ -25,8 +25,8 @@ def compute_hog(img: np.ndarray, visualize=False) -> np.ndarray:
         visualize=visualize,
     )
 
-def compute_hog_with_visualization(img: np.ndarray, is_multiple=False) -> tuple[np.ndarray, np.ndarray]:
-    if not is_multiple:
+def compute_hog_with_visualization(img: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    if img.ndim == 2:
         img = np.array([img])
     features_list = []
     hog_images = []
@@ -35,7 +35,7 @@ def compute_hog_with_visualization(img: np.ndarray, is_multiple=False) -> tuple[
         features_list.append(features)
         hog_images.append(hog_image)
     features = np.mean(features_list, axis=0)
-    hog_image = np.mean(hog_images, axis=0)
+    hog_image = hog_images[0]
     return features, hog_image
 
 def compute_images_hog(

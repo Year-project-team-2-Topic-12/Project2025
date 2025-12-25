@@ -3,7 +3,12 @@ from functools import lru_cache
 
 
 @lru_cache(maxsize=1)
-def get_hog_predictor() -> HogPredictor:
+def get_hog_predictor() -> 'HogPredictor':
+    from ml.hog_predictor import HogPredictor
+    return HogPredictor('hog_pca_poly_logreg_pics')
+
+@lru_cache(maxsize=1)
+def get_hog_predictor_multiple() -> 'HogPredictor':
     from ml.hog_predictor import HogPredictor
     return HogPredictor()
 

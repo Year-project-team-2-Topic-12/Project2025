@@ -1,11 +1,11 @@
 import base64
 from typing import Any
 
-from ..deps import get_hog_predictor
+from ..deps import get_hog_predictor, get_hog_predictor_multiple
 from ..schemas.inference_schema import ForwardImageResponse, DebugPayload, PredictionResponse
 from ml.hog_predictor import HogPredictor
 from ml.preprocessing import resize_with_padding_cv2, enhance_brightness_cv2
-from ml.hog import compute_images_hog, compute_hog_with_visualization
+from ml.hog import compute_hog_with_visualization
 from fastapi import Depends, UploadFile
 import cv2
 import numpy as np
@@ -13,23 +13,24 @@ import numpy as np
 
 
 class InferenceService:
-    def __init__(self, as_gray=True, predictor: HogPredictor=Depends(get_hog_predictor)):
+    def __init__(self, as_gray=True, predictor_multiple: HogPredictor=Depends(get_hog_predictor_multiple), predictor_single: HogPredictor=Depends(get_hog_predictor)):
         self.as_gray = as_gray
-        self.predictor = predictor
+        self.predictor_multiple = predictor_multiple
+        self.predictor_single = predictor_single
 
     def predict_single(self, upload: UploadFile, debug: bool = False) -> ForwardImageResponse:
         image = self._read_upload_cv2_gray(upload)
         hog_vector, processed_image, hog_image = self._preprocess_study([image], return_image=True)
-        prediction_value, confidence = self._predict_with_confidence(hog_vector)
+        prediction_value, confidence = self.predictor_single.predict_with_confidence(hog_vector, is_multiple=False)
 
         if processed_image is None:
             raise ValueError("Processed image not available")
 
         response: ForwardImageResponse = ForwardImageResponse(
             filename=upload.filename,
-            prediction=prediction_value,
-            confidence=confidence,
-            image_base64=self._encode_image_base64(processed_image),
+            prediction=prediction_value.item(),
+            confidence=confidence.item(),
+            image_base64=self._encode_image_base64(image),
         )
 
         if debug:
@@ -55,7 +56,9 @@ class InferenceService:
                 studies[study_id] = []
                 study_order.append(study_id)
             studies[study_id].append(upload)
-
+        hog_vectors_studies: list[np.ndarray] = []
+        processed_images_studies: list[np.ndarray | None] = []
+        hog_images_studies: list[np.ndarray | None] = []
         results: list[PredictionResponse] = []
         for study_id in study_order:
             uploads = studies[study_id]
@@ -67,11 +70,24 @@ class InferenceService:
                     filenames.append(upload.filename)
 
             hog_vector, processed_image, hog_image = self._preprocess_study(images, return_image=debug)
-            prediction_value, confidence = self._predict_with_confidence(hog_vector)
+            hog_vectors_studies.append(hog_vector)
+            processed_images_studies.append(processed_image)
+            hog_images_studies.append(hog_image)
+
+        prediction, confidence = self.predictor_multiple.predict_with_confidence(np.array(hog_vectors_studies), is_multiple=True)
+        for idx, study_id in enumerate(study_order):
+            hog_vector = hog_vectors_studies[idx]
+            processed_image = processed_images_studies[idx]
+            print("len processed images studies", np.array(processed_images_studies).shape)
+            print("hog vector shape", np.array(hog_vectors_studies).shape)
+            hog_image = hog_images_studies[idx]
+            filenames = [upload.filename for upload in studies[study_id] if upload.filename]
+            prediction_value = prediction[idx]
+            confidence_value = confidence[idx]
             results.append(
                 self._postprocess(
                     prediction_value,
-                    confidence=confidence,
+                    confidence=confidence_value,
                     study_id=study_id,
                     filenames=filenames,
                     debug=debug,
@@ -80,11 +96,10 @@ class InferenceService:
                     hog_image=hog_image,
                 )
             )
-
         return results
     
     def _read_upload_cv2_gray(self, upload: UploadFile) -> np.ndarray:
-        data = upload.file.read()           # bytes
+        data = upload.file.read()
         arr = np.frombuffer(data, np.uint8)
         img = cv2.imdecode(arr, cv2.IMREAD_GRAYSCALE)
 
@@ -92,23 +107,6 @@ class InferenceService:
             raise ValueError("Cannot decode image")
 
         return img
-
-    def _preprocess(
-        self,
-        image: np.ndarray,
-        *,
-        return_image: bool = False,
-    ) -> tuple[np.ndarray, np.ndarray | None, np.ndarray | None]:
-        enhanced = enhance_brightness_cv2(image)
-        resized = resize_with_padding_cv2(enhanced)
-        if return_image:
-            hog_vector, hog_image = compute_hog_with_visualization(resized)
-        else:
-            hog_vector = compute_images_hog([resized])
-            hog_image = None
-        if return_image:
-            return hog_vector, resized, hog_image
-        return hog_vector, None, None
 
     def _preprocess_study(
         self,
@@ -121,10 +119,10 @@ class InferenceService:
             enhanced = enhance_brightness_cv2(image)
             resized = resize_with_padding_cv2(enhanced)
             processed_images.append(resized)
+            print("Processed image shape:", resized.shape)
 
-        hog_vector = compute_images_hog(processed_images)
+        hog_vector, hog_image = compute_hog_with_visualization(np.array(processed_images))
         if return_image:
-            hog_vector_first, hog_image = compute_hog_with_visualization(processed_images, is_multiple=True)
             return hog_vector, processed_images[0], hog_image
         return hog_vector, None, None
 
@@ -139,18 +137,6 @@ class InferenceService:
         hog_u8 = cv2.normalize(hog_image, None, 0, 255, cv2.NORM_MINMAX)
         return self._encode_image_base64(hog_u8)
 
-    def _predict_with_confidence(self, hog_vector: np.ndarray) -> tuple[Any, float | None]:
-        predictions = self.predictor.predict(hog_vector)
-        prediction_value = self._normalize_prediction(predictions)
-        print("Результаты предсказания:")
-        print(predictions)
-        print(type(predictions))
-        confidence = None
-        if hasattr(self.predictor.model, "predict_proba"):
-            proba = self.predictor.model.predict_proba([hog_vector])
-            print("Вероятности предсказания:")
-            print(proba)
-        return prediction_value, 0
 
     def _normalize_prediction(self, predictions: Any) -> Any:
         if isinstance(predictions, np.ndarray):

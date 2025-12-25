@@ -14,7 +14,7 @@ class HogPredictor:
         print(f"Predicting using the model on the provided image")
         return self.model.predict(images)
 
-    def predict_with_confidence(self, image: np.ndarray, is_multiple=False) -> tuple[np.ndarray, float | np.ndarray | None]:
+    def predict_with_confidence(self, image: np.ndarray, is_multiple=False) -> tuple[np.ndarray, np.ndarray]:
         images = np.array([image]) if not is_multiple else image
         prediction = self.predict(images)
         confidence = None
@@ -22,8 +22,11 @@ class HogPredictor:
         if hasattr(self.model, "predict_proba"):
             proba = self.model.predict_proba(images)
             if isinstance(proba, np.ndarray) and proba.size > 0:
-                confidence = proba[np.arange(len(images)), images]
+                print("prediction datatype", prediction.dtype)
+                confidence = proba[np.arange(len(prediction)), prediction]
+                print(confidence)
+                return prediction, confidence
+        else:
+            raise NotImplementedError("Model does not support probability estimates.")
 
-                confidence = float(np.max(proba))
 
-        return prediction, confidence
