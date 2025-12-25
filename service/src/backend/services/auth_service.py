@@ -11,7 +11,7 @@ from backend.db.repositories.user_repository import UserRepository
 from ml import env
 
 # Auth settings
-SECRET_KEY = "SUPER_SECRET_KEY_CHANGE_ME"
+SECRET_KEY = env.SECRET_KEY
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
