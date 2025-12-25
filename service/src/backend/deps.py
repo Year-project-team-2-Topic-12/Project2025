@@ -47,8 +47,8 @@ def get_stats_service(
 
 def get_inference_service(
         hog_predictor_multiple = Depends(get_hog_predictor_multiple),
-        hog_predictor_single=Depends(get_hog_predictor),
-        request_logging_service=Depends(get_request_logging_service)
+        hog_predictor_single = Depends(get_hog_predictor),
+        request_logging_service = Depends(get_request_logging_service)
     ) -> 'InferenceService':
     from .services.inference_service import InferenceService
     return InferenceService(predictor_multiple=hog_predictor_multiple, predictor_single=hog_predictor_single, request_logging_service=request_logging_service)
