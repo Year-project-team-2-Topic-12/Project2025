@@ -1,0 +1,10 @@
+{
+  "name": "ml-service-env",
+  "values": [
+    { "key": "BASE_URL", "value": "http://127.0.0.1:8000", "enabled": true },
+    { "key": "TOKEN", "value": "", "enabled": true },
+    { "key": "USERNAME", "value": "admin", "enabled": true },
+    { "key": "PASSWORD", "value": "admin", "enabled": true },
+    { "key": "STUDY_IDS", "value": "id1,id2", "enabled": true }
+  ]
+}
