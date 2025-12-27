@@ -1,12 +1,13 @@
 from sklearn.metrics import accuracy_score, cohen_kappa_score, f1_score, make_scorer, roc_auc_score
 import optuna
-from optuna.integration import OptunaSearchCV
+import inspect
+from sklearn.base import clone
+from sklearn.model_selection import GridSearchCV, StratifiedKFold
 from typing import Any, Callable, Protocol, TypedDict, Unpack, overload
 import time
 import logging
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 from .data import load_model_pipeline, load_model_results, save_model_pipeline, save_model_results, get_data_path, get_full_model_name
 from ml.env import SEED
@@ -14,6 +15,95 @@ from ml.env import SEED
 ArrayLike = np.ndarray | pd.Series | pd.DataFrame
 
 logger = logging.getLogger(__name__)
+
+class OptunaSearchResult:
+    def __init__(self, best_estimator, best_params, cv_results, best_index, study):
+        self.best_estimator_ = best_estimator
+        self.best_params_ = best_params
+        self.cv_results_ = cv_results
+        self.best_index_ = best_index
+        self.study_ = study
+
+def _select_index(X, idx):
+    if hasattr(X, "iloc"):
+        return X.iloc[idx]
+    return X[idx]
+
+def _build_optuna_params(trial, param_grid: dict) -> dict:
+    params = {}
+    for name, spec in param_grid.items():
+        params[name] = spec(trial) if callable(spec) else spec
+    return params
+
+def _score_with_scorer(scorer, estimator, X_val, y_val) -> float:
+    try:
+        return float(scorer(estimator, X_val, y_val))
+    except Exception:
+        y_pred = estimator.predict(X_val)
+        return float(scorer._score_func(y_val, y_pred))
+
+def _run_optuna_search(
+    base_pipeline: Pipeline,
+    X,
+    y,
+    *,
+    scorer,
+    param_grid: dict,
+    n_trials: int,
+    cv,
+    random_state: int,
+    n_jobs: int,
+    study_name: str,
+    storage_name: str,
+    direction: str,
+    show_progress_bar: bool,
+):
+    if isinstance(cv, int):
+        cv = StratifiedKFold(n_splits=cv, shuffle=True, random_state=random_state)
+
+    def objective(trial: optuna.Trial):
+        params = _build_optuna_params(trial, param_grid)
+        pipe = clone(base_pipeline).set_params(**params)
+        scores = []
+        fit_times = []
+        for train_idx, val_idx in cv.split(X, y):
+            X_train = _select_index(X, train_idx)
+            y_train = _select_index(y, train_idx)
+            X_val = _select_index(X, val_idx)
+            y_val = _select_index(y, val_idx)
+            start = time.time()
+            pipe.fit(X_train, y_train)
+            fit_times.append(time.time() - start)
+            scores.append(_score_with_scorer(scorer, pipe, X_val, y_val))
+        trial.set_user_attr("mean_fit_time", float(np.mean(fit_times)))
+        trial.set_user_attr("std_fit_time", float(np.std(fit_times)))
+        return float(np.mean(scores))
+
+    study = optuna.create_study(
+        direction=direction,
+        study_name=study_name,
+        storage=storage_name,
+        load_if_exists=True,
+    )
+    optimize_kwargs = {"n_trials": n_trials, "n_jobs": n_jobs}
+    if "show_progress_bar" in inspect.signature(study.optimize).parameters:
+        optimize_kwargs["show_progress_bar"] = show_progress_bar
+    study.optimize(objective, **optimize_kwargs)
+
+    trials = list(study.trials)
+    mean_fit_time = [t.user_attrs.get("mean_fit_time", np.nan) for t in trials]
+    std_fit_time = [t.user_attrs.get("std_fit_time", np.nan) for t in trials]
+    best_index = next(
+        i for i, t in enumerate(trials) if t.number == study.best_trial.number
+    )
+    cv_results = {
+        "mean_fit_time": np.array(mean_fit_time),
+        "std_fit_time": np.array(std_fit_time),
+    }
+    best_params = study.best_params
+    best_pipe = clone(base_pipeline).set_params(**best_params)
+    best_pipe.fit(X, y)
+    return OptunaSearchResult(best_pipe, best_params, cv_results, best_index, study)
 
 class GetDataKwargs(TypedDict, total=False):
     is_images: bool | None
@@ -43,9 +133,9 @@ OPTUNA_DEFAULT_PARAMS = {
     'n_trials': 50,
     'n_jobs': 8,
     'cv': 5,
-    'refit': True,
     'random_state': SEED,
-    # "show_progress_bar": True,
+    'direction': 'maximize',
+    'show_progress_bar': True,
 }
 
 def get_data_for_anatomy_default(base_df: pd.DataFrame, anatomy: str | None = None, get_all: bool = False, **kwargs) -> tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
@@ -107,25 +197,32 @@ def fit_pipeline_anatomies(
             logger.info("Нет сохранённой - обучаем модель %s для анатомии %s", model_name_base, anatomy)
             logger.debug("len X_train: %s", len(X_train))
             logger.debug("len X_val: %s", len(X_val))
+            start_time = time.time()
             if is_optuna:
                 study_name = model_name_base if anatomy is None else get_full_model_name(model_name_base, anatomy)
                 storage_name = f"sqlite:///{get_data_path(f'{study_name}.db')}"
-                study = optuna.create_study(study_name=study_name, storage=storage_name, load_if_exists=True, direction="maximize")
-                optuna_params = {
-                    **OPTUNA_DEFAULT_PARAMS,
-                    'param_distributions': param_grid,
-                    'scoring': kappa_scorer,
-                    'study': study,
-                    **grid_search_params,
-                }
-                grid_search = OptunaSearchCV(model_pipeline, **optuna_params)
+                optuna_params = {**OPTUNA_DEFAULT_PARAMS, **grid_search_params}
+                grid_search = _run_optuna_search(
+                    model_pipeline,
+                    X_train,
+                    y_train,
+                    scorer=kappa_scorer,
+                    param_grid=param_grid,
+                    n_trials=optuna_params["n_trials"],
+                    cv=optuna_params["cv"],
+                    random_state=optuna_params["random_state"],
+                    n_jobs=optuna_params["n_jobs"],
+                    study_name=study_name,
+                    storage_name=storage_name,
+                    direction=optuna_params["direction"],
+                    show_progress_bar=optuna_params["show_progress_bar"],
+                )
             else:
                 grid_params = {
                     'param_grid': param_grid, 'scoring': kappa_scorer, 'cv': 5, 'n_jobs': -1, **grid_search_params
                 }
                 grid_search = GridSearchCV(model_pipeline, **grid_params)
-            start_time = time.time()
-            grid_search.fit(X_train, y_train)
+                grid_search.fit(X_train, y_train)
             fit_time = time.time() - start_time
             save_model_pipeline(grid_search, model_name_base, anatomy=anatomy)
             logger.info("Время обучения grid search (сек): %s", fit_time)
