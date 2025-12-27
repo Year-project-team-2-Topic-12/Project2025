@@ -1,25 +1,56 @@
 from sklearn.metrics import accuracy_score, cohen_kappa_score, f1_score, make_scorer, roc_auc_score
-from .data import load_model_pipeline, load_model_results, save_model_pipeline, save_model_results
-from typing import Protocol
+import optuna
+from optuna.integration import OptunaSearchCV
+from typing import Any, Callable, Protocol, TypedDict, Unpack, overload
+import time
+import logging
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
-import time
-import logging
+from .data import load_model_pipeline, load_model_results, save_model_pipeline, save_model_results, get_data_path, get_full_model_name
+from ml.env import SEED
 
 ArrayLike = np.ndarray | pd.Series | pd.DataFrame
 
 logger = logging.getLogger(__name__)
 
+class GetDataKwargs(TypedDict, total=False):
+    is_images: bool | None
+    study_aggs: dict[str, Callable[[np.ndarray], np.ndarray]] | None
+    hog_n_jobs: int | None
+    extract_func: Callable[[str], dict[str, Any]] | None
+
 class GetDataFunction(Protocol):
+    @overload
     def __call__(
         self,
-        paths_dataframe: pd.DataFrame,
+        base_df: pd.DataFrame,
         anatomy: str | None = None,
         get_all: bool = False, # Если True, то игнорируем anatomy,
-        is_images: bool = False
-    ) -> tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]: ...
+    ) -> tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]: ... # X_train, y_train, X_val, y_val
+
+    @overload
+    def __call__(
+        self,
+        base_df: pd.DataFrame,
+        anatomy: str | None = None,
+        get_all: bool = False, # Если True, то игнорируем anatomy,
+        **kwargs: Unpack[GetDataKwargs],
+    ) -> tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]: ... # X_train, y_train, X_val, y_val
+
+OPTUNA_DEFAULT_PARAMS = {
+    'n_trials': 50,
+    'n_jobs': 8,
+    'cv': 5,
+    'refit': True,
+    'random_state': SEED,
+    # "show_progress_bar": True,
+}
+
+def get_data_for_anatomy_default(base_df: pd.DataFrame, anatomy: str | None = None, get_all: bool = False, **kwargs) -> tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
+    # Заглушка по умолчанию
+    return np.array([]), np.array([]), np.array([]), np.array([])
 
 kappa_scorer = make_scorer(cohen_kappa_score)
 """
@@ -43,9 +74,10 @@ def fit_pipeline_anatomies(
         grid_search_params={},
         use_all=False,
         use_decision_function=True,
-        get_data_for_anatomy: GetDataFunction | None = None,
+        get_data_for_anatomy: GetDataFunction  = get_data_for_anatomy_default,
         only_anatomy: str | None = None,
-        is_images: bool = None,
+        is_optuna: bool = False,
+        params_get_data: dict = {},
         ):
 
     resulting_data = {
@@ -75,10 +107,23 @@ def fit_pipeline_anatomies(
             logger.info("Нет сохранённой - обучаем модель %s для анатомии %s", model_name_base, anatomy)
             logger.debug("len X_train: %s", len(X_train))
             logger.debug("len X_val: %s", len(X_val))
-            grid_params = {
-                'param_grid': param_grid, 'scoring': kappa_scorer, 'cv': 5, 'n_jobs': -1, **grid_search_params
-            }
-            grid_search = GridSearchCV(model_pipeline, **grid_params)
+            if is_optuna:
+                study_name = model_name_base if anatomy is None else get_full_model_name(model_name_base, anatomy)
+                storage_name = f"sqlite:///{get_data_path(f'{study_name}.db')}"
+                study = optuna.create_study(study_name=study_name, storage=storage_name, load_if_exists=True, direction="maximize")
+                optuna_params = {
+                    **OPTUNA_DEFAULT_PARAMS,
+                    'param_distributions': param_grid,
+                    'scoring': kappa_scorer,
+                    'study': study,
+                    **grid_search_params,
+                }
+                grid_search = OptunaSearchCV(model_pipeline, **optuna_params)
+            else:
+                grid_params = {
+                    'param_grid': param_grid, 'scoring': kappa_scorer, 'cv': 5, 'n_jobs': -1, **grid_search_params
+                }
+                grid_search = GridSearchCV(model_pipeline, **grid_params)
             start_time = time.time()
             grid_search.fit(X_train, y_train)
             fit_time = time.time() - start_time
@@ -124,11 +169,14 @@ def fit_pipeline_anatomies(
         resulting_data['train_roc_auc'].append(metrics['train']['roc_auc'])
         resulting_data['valid_roc_auc'].append(metrics['valid']['roc_auc'])
 
-    param_images = {'is_images': is_images} if is_images is not None else {}
-
     if use_all:
         logger.info("Обучаем модель %s по всему датасету", model_name_base)
-        X_train, y_train, X_val, y_val = get_data_for_anatomy(paths_df, "ALL_anatomies", get_all=True, **param_images)
+        X_train, y_train, X_val, y_val = get_data_for_anatomy(
+            paths_df,
+            "ALL_anatomies",
+            get_all=True,
+            **params_get_data,
+        )
         train_model_for_anatomy(X_train, y_train, X_val, y_val)
     else:
         logger.info("Обучаем модель %s по анатомиям", model_name_base)
@@ -136,7 +184,11 @@ def fit_pipeline_anatomies(
             if only_anatomy and anatomy != only_anatomy:
                 continue
             logger.info("Обучаем модель по анатомии %s", anatomy)
-            X_train, y_train, X_val, y_val = get_data_for_anatomy(paths_df, anatomy, **param_images)
+            X_train, y_train, X_val, y_val = get_data_for_anatomy(
+                paths_df,
+                anatomy,
+                **params_get_data,
+            )
             train_model_for_anatomy(X_train, y_train, X_val, y_val, anatomy=anatomy)
 
     results_df =  pd.DataFrame(resulting_data)
@@ -170,3 +222,5 @@ def print_return_metrics(y_train, y_pred_train, y_val, y_pred_val, y_pred_train_
     )
     valid_data = {'accuracy': acc, 'f1': f1, 'kappa': kappa, 'roc_auc': roc_auc_val}
     return {'train': train_data, 'valid': valid_data}
+    if is_images is not None and "is_images" not in params_get_data:
+        params_get_data = {**params_get_data, "is_images": is_images}

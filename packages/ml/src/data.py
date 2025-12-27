@@ -23,8 +23,11 @@ def get_results_fname(model_name_base: str, use_all: bool) -> str:
     suffix = "_all" if use_all else ""
     return f"results_{model_name_base}{suffix}.csv"
 
+def get_full_model_name(model_name_base: str, anatomy: str | None = None) -> str:
+    return f"{model_name_base}{get_anatomy_suffix(anatomy)}"
+
 def get_model_fname(model_name_base: str, anatomy: str | None = None) -> str:
-    return f"model_{model_name_base}{get_anatomy_suffix(anatomy)}.pkl"
+    return f"model_{get_full_model_name(model_name_base, anatomy)}.pkl"
 
 def get_models_path(model_fname: str) -> Path:
     path = Path(MODELS_PATH) / Path(model_fname)

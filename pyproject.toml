@@ -24,6 +24,8 @@ dependencies = [
   "passlib[bcrypt]>=1.7.4",         # Библиотека для хеширования паролей (чтобы не хранить их в открытом виде)
   "bcrypt<4",
   "python-jose[cryptography]>=3.3.0",
+  "optuna>=4.6.0",
+  "optuna-integration[sklearn]>=4.6.0",
 ]
 [project.optional-dependencies]
 
