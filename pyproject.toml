@@ -24,6 +24,9 @@ dependencies = [
   "passlib[bcrypt]>=1.7.4",         # Библиотека для хеширования паролей (чтобы не хранить их в открытом виде)
   "bcrypt<4",
   "python-jose[cryptography]>=3.3.0",
+  # DL
+  "torchvision>=0.26.0",
+  "torch>=2.11.0",
 ]
 [project.optional-dependencies]
 
@@ -42,6 +45,7 @@ notebooks = [
   "ipykernel",
   "ipython==9.6.0",
   "jupyterlab==4.4.9",
+  "plotly>=6.7.0",
 ]
 
 dev = [
