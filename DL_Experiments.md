@@ -1,433 +1,52 @@
-# DL experiments: описание экспериментов и результатов
+# DL experiments по MURA
 
-## Исходные ноутбуки
+## Источники
 
-- [DL_Experiments_MURA_DINOv2_Adapters_v3_Sunnatilla.ipynb](./DL_Experiments_MURA_DINOv2_Adapters_v3_Sunnatilla.ipynb)
-- [DL_Experiments_densenet_Leona.ipynb](./DL_Experiments_densenet_Leona.ipynb)
+Основные ноутбуки:
 
-## Общий контекст
+- [DL_Experiments_densenet.ipynb](./DL_Experiments_densenet.ipynb)
+- [DL_Experiments_RESNET_collab_ver_3.ipynb](./DL_Experiments_RESNET_collab_ver_3.ipynb)
+- [DL_Experiments_MURA_DINOv2_Adapters_v3.ipynb](./DL_Experiments_MURA_DINOv2_Adapters_v3.ipynb)
 
-Оба ноутбука решают задачу бинарной классификации MURA: определить, является ли рентгеновское исследование/изображение нормальным или патологическим. Используются 7 анатомических категорий:
+Основная метрика(как и прежде): **Cohen's kappa**. Дополнительно считались accuracy, ROC-AUC, PR-AUC и F1.
 
-- `XR_WRIST`
-- `XR_ELBOW`
-- `XR_SHOULDER`
-- `XR_FINGER`
-- `XR_FOREARM`
-- `XR_HUMERUS`
-- `XR_HAND`
+Важное замечание для сравнения: DenseNet и ResNet считают основную финальную метрику на уровне исследования (`study`): вероятности снимков одного исследования агрегируются, после чего считается kappa. DINOv2 в сохранённом output оценивается по строкам `valid.csv`, то есть по изображениям. Поэтому DINOv2 и study-level модели сравнимы по направлению качества, но не идеально один-в-один.
 
-Основная метрика в экспериментах - Cohen's kappa. Также считаются accuracy, AUC и, в DINOv2-ноутбуке, F1.
+## DenseNet121
 
-Важное ограничение сравнения: DenseNet-ноутбук агрегирует предсказания по исследованию через среднюю вероятность изображений одного `study_id`, а DINOv2-ноутбук, судя по коду, считает метрики по строкам `VAL_CSV`, то есть по изображениям, если CSV не был заранее агрегирован. Поэтому абсолютные значения DenseNet и DINOv2 нужно сравнивать осторожно.
+Источник: [DL_Experiments_densenet.ipynb](./DL_Experiments_densenet.ipynb)
 
-## Эксперимент 1: DINOv2-Large, SimpleMURA
+### Общий pipeline
 
-Источник: [DL_Experiments_MURA_DINOv2_Adapters_v3_Sunnatilla.ipynb](./DL_Experiments_MURA_DINOv2_Adapters_v3_Sunnatilla.ipynb)
+- В ноутбуке загружено `37,108` изображений.
+- Размер изображений - 224x224.
+- Для каждого изображения формируется `unique_study_id = patient_id + "_" + study_id`.
+- Validation-предсказания агрегируются на уровень исследования: средняя вероятность по всем снимкам одного `study_id`.
+- Batch size: `64`.
+- Train loader: `533` батча, validation loader: `48` батчей.
+- Loss: `BCEWithLogitsLoss`, кроме weighted-эксперимента.
+- Optimizer: `Adam`.
+- Scheduler не использовался.
+- Early stopping реализован через patience, но best checkpoint в цикле не восстанавливается; финальные метрики считаются на состоянии модели после остановки.
 
-### Цель
+### Эксперименты
 
-Улучшить предыдущую версию модели `v1`, где общий kappa был `0.6348`. В начале ноутбука ожидался диапазон `0.76-0.82` overall kappa, с заметным ростом слабых категорий `XR_FINGER`, `XR_HAND` и `XR_SHOULDER`.
-
-### Данные и окружение
-
-- Среда: Google Colab.
-- GPU: NVIDIA L4.
-- VRAM: 23.7 GB.
-- Размер изображения: `448x448`.
-- Train: `36,808` изображений.
-- Validation: `3,197` изображений.
-- Batch size: `8`.
-- Gradient accumulation: `16`.
-- Эффективный batch size: `128`.
-- Количество эпох: `15`.
-
-### Архитектура
-
-Несмотря на название файла с `Adapters`, в фактическом коде реализована модель `SimpleMURA` без отдельного adapter-модуля:
-
-- backbone: `facebook/dinov2-large`;
-- DINOv2-Large изначально полностью заморожен;
-- используется CLS-токен `last_hidden_state[:, 0, :]`;
-- поверх CLS-токена стоит общий head:
-  - `Linear(1024, 256)`;
-  - `LayerNorm`;
-  - `GELU`;
-  - `Dropout(0.3)`;
-  - `Linear(256, 64)`;
-  - `GELU`;
-  - `Dropout(0.2)`;
-- для каждой анатомии отдельный бинарный классификатор `Linear(64, 2)`.
-
-### Аугментации и балансировка
-
-В ноутбуке выделены слабые категории:
-
-- `XR_FINGER`
-- `XR_HAND`
-- `XR_SHOULDER`
-- `XR_FOREARM`
-
-Для них используется более сильный train-transform:
-
-- horizontal flip;
-- rotation до 20 градусов;
-- affine scale/translate;
-- elastic transform;
-- CLAHE;
-- random gamma;
-- brightness/contrast;
-- noise;
-- blur.
-
-Для остальных категорий применяется более мягкая аугментация:
-
-- horizontal flip;
-- rotation до 10 градусов;
-- CLAHE;
-- random gamma;
-- brightness/contrast.
-
-Также используется `WeightedRandomSampler` с повышенными весами для слабых категорий:
-
-| Категория | Вес |
-|---|---:|
-| XR_FINGER | 1.5 |
-| XR_HAND | 1.5 |
-| XR_SHOULDER | 1.3 |
-| XR_FOREARM | 1.2 |
-| XR_ELBOW | 1.0 |
-| XR_HUMERUS | 1.0 |
-| XR_WRIST | 1.0 |
-
-`POS_WEIGHT` для положительного класса составил `1.475`.
-
-### Обучение
-
-Использовалась функция потерь `ProgressiveLoss`:
-
-- эпохи 1-5: BCE с label smoothing `0.1`;
-- эпохи 6-9: смесь BCE и focal loss;
-- после 9-й эпохи: focal loss с `gamma=1.5`.
-
-Оптимизация:
-
-- `AdamW`;
-- learning rate `1e-3` для head и классификаторов;
-- weight decay `0.01`;
-- cosine annealing scheduler;
-- mixed precision через AMP;
-- gradient clipping `1.0`;
-- early stopping с patience `5`.
-
-План постепенной разморозки DINOv2:
-
-| Эпоха | Размораживаемые блоки |
-|---:|---|
-| 5 | последние 4 блока |
-| 8 | последние 8 блоков |
-| 11 | последние 12 блоков |
-
-Для размороженных параметров добавлялся learning rate `1e-6`.
-
-### Оценка
-
-Для каждой анатомии подбирался лучший threshold по kappa на диапазоне `0.05-0.95` с шагом `0.01`. В коде реализован TTA, но запуск TTA был прерван `KeyboardInterrupt`, поэтому финальная сохранённая модель использует метод `No TTA`.
-
-В конце также добавлен код для CV-подбора threshold через `StratifiedKFold`, но сохранённый output показывает только начало выполнения: `Загрузка лучшей модели...`. Завершённых CV-результатов в ноутбуке нет.
-
-### Результаты DINOv2 v3 без TTA
-
-| Категория | v1 kappa | v3 kappa | AUC | F1 | Accuracy | Threshold | N | Delta kappa |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| XR_WRIST | 0.7118 | 0.7380 | 0.9226 | 0.8444 | 0.8725 | 0.56 | 659 | +0.0262 |
-| XR_ELBOW | 0.7202 | 0.7457 | 0.9284 | 0.8599 | 0.8731 | 0.57 | 465 | +0.0255 |
-| XR_SHOULDER | 0.5664 | 0.6092 | 0.8655 | 0.8036 | 0.8046 | 0.49 | 563 | +0.0428 |
-| XR_FINGER | 0.5371 | 0.6442 | 0.8812 | 0.8285 | 0.8221 | 0.48 | 461 | +0.1071 |
-| XR_FOREARM | 0.6813 | 0.7675 | 0.9311 | 0.8763 | 0.8837 | 0.49 | 301 | +0.0862 |
-| XR_HUMERUS | 0.7156 | 0.7846 | 0.9257 | 0.8897 | 0.8924 | 0.58 | 288 | +0.0690 |
-| XR_HAND | 0.5646 | 0.6164 | 0.8686 | 0.7500 | 0.8217 | 0.46 | 460 | +0.0518 |
-| OVERALL | 0.6348 | 0.6874 | 0.9040 | 0.8304 | 0.8445 | 0.49 | 3197 | +0.0526 |
-
-### Вывод по DINOv2
-
-Модель улучшила общий kappa с `0.6348` до `0.6874`, то есть на `+0.0526`. Все категории улучшились относительно `v1`, самый большой рост получился на:
-
-- `XR_FINGER`: `+0.1071`;
-- `XR_FOREARM`: `+0.0862`;
-- `XR_HUMERUS`: `+0.0690`.
-
-Цель `0.80` overall kappa не достигнута: до неё осталось `0.1126`. Из ожидаемых диапазонов лучше всего совпал `XR_HUMERUS`, а слабые категории `XR_SHOULDER`, `XR_FINGER` и `XR_HAND` всё ещё заметно ниже целевых значений.
-
-## Эксперимент 2: DenseNet121
-
-Источник: [DL_Experiments_densenet_Leona.ipynb](./DL_Experiments_densenet_Leona.ipynb)
-
-### Данные и общий pipeline
-
-Ноутбук использует предварительно подготовленный датасет после resize и улучшения качества. Через `build_exp_dataframe(DATA_ROOT, return_images=True)` было загружено `37,108` изображений.
-
-После загрузки формируется `unique_study_id`:
-
-```python
-df_images["unique_study_id"] = df_images["patient_id"] + "_" + df_images["study_id"]
-```
-
-Далее данные делятся на `train` и `valid`. Во всех экспериментах validation-предсказания агрегируются на уровень исследования:
-
-- модель выдаёт вероятность для каждого изображения;
-- для одного `study_id` берётся средняя вероятность;
-- label и anatomy берутся как первые значения группы;
-- метрики считаются уже по агрегированному `study_df`.
-
-Это ближе к стандартной MURA-оценке на уровне исследования.
-
-### Общие функции
-
-В ноутбуке определены:
-
-- `MURADataset` для чтения изображений через PIL и применения torchvision transforms;
-- `train_one_epoch`;
-- `validate`;
-- `aggregate`;
-- `compute_metrics`;
-- `threshold`, которая перебирает `200` threshold-значений от `0` до `1` и выбирает threshold с максимальным kappa.
-
-Во всех базовых DenseNet-экспериментах используется:
-
-- `DenseNet121` с ImageNet-весами;
-- бинарный classifier `Linear(in_features, 1)`;
-- `BCEWithLogitsLoss`;
-- `Adam`;
-- batch size `64`;
-- validation batch size `64`;
-- нормализация `Normalize([0.485]*3, [0.229]*3)`.
-
-### DenseNet: сводная таблица экспериментов
-
-| Эксперимент | Основное изменение | Best threshold | Accuracy | AUC | Kappa |
+| Эксперимент | Архитектура и обучение | Threshold | Accuracy | AUC | Kappa |
 |---|---|---:|---:|---:|---:|
-| Baseline | Разморожен только `denseblock4` и classifier | 0.4774 | 0.8204 | 0.8817 | 0.6355 |
-| Weighted loss | Baseline + `pos_weight=1.1297` | 0.4070 | 0.8122 | 0.8728 | 0.6232 |
-| 2 blocks | Разморожены `denseblock3`, `denseblock4` и classifier | 0.4874 | 0.8184 | 0.8756 | 0.6316 |
-| Augmented | 2 blocks + усиленные аугментации для слабых анатомий | 0.4121 | 0.7936 | 0.8628 | 0.5818 |
-| Sampler | 2 blocks + oversampling слабых анатомий | 0.4171 | 0.8142 | 0.8698 | 0.6246 |
+| Baseline | `DenseNet121` ImageNet; заморожено всё, кроме `denseblock4` и `classifier`; `Adam(lr=1e-5)` | 0.4774 | 0.8204 | 0.8817 | 0.6355 |
+| Weighted loss | Как baseline, но `pos_weight=1.1297` в `BCEWithLogitsLoss` | 0.4070 | 0.8122 | 0.8728 | 0.6232 |
+| 2 blocks | Разморожены `denseblock3`, `denseblock4`, `classifier`; feature LR `1e-6`, classifier LR `1e-5` | 0.4874 | 0.8184 | 0.8756 | 0.6316 |
+| Targeted augmentation | 2 blocks + усиленная аугментация для `XR_SHOULDER`, `XR_HAND`, `XR_FINGER` | 0.4121 | 0.7936 | 0.8628 | 0.5818 |
+| Oversampling | 2 blocks + `WeightedRandomSampler`, вес `2.0` для слабых анатомий | 0.4171 | 0.8142 | 0.8698 | 0.6246 |
 | Adaptive threshold | Загружен `blocks2_DenseNet.pth`, threshold подобран отдельно для каждой анатомии | per anatomy | - | - | 0.6622 |
 
-### Baseline DenseNet121
+Targeted augmentation использовала `RandomHorizontalFlip`, `RandomRotation(10)`, `RandomAffine(translate=(0.03, 0.03))`, `ColorJitter(0.05, 0.05)`, `ToTensor`, `Normalize([0.485]*3, [0.229]*3)`. Для остальных экспериментов train/val transform был только `ToTensor + Normalize`.
 
-Настройка:
+Итоговая heatmap kappa из ноутбука:
 
-- `DenseNet121_Weights.IMAGENET1K_V1`;
-- все параметры заморожены;
-- разморожен только `denseblock4`;
-- classifier заменён на `Linear(..., 1)`;
-- optimizer: `Adam`, learning rate `1e-5`;
-- loss: обычный `BCEWithLogitsLoss`;
-- сохранение модели: `base_DenseNet.pth`.
+![DenseNet kappa heatmap](./doc.files/dl_experiments/densenet_kappa_heatmap.png)
 
-Лучший threshold:
-
-- `0.47738693467336685`.
-
-Итоговые метрики:
-
-| Accuracy | AUC | Kappa |
-|---:|---:|---:|
-| 0.8204 | 0.8817 | 0.6355 |
-
-Метрики по анатомиям:
-
-| Категория | Accuracy | AUC | Kappa |
-|---|---:|---:|---:|
-| XR_WRIST | 0.8696 | 0.9112 | 0.7265 |
-| XR_SHOULDER | 0.8395 | 0.8995 | 0.6780 |
-| XR_FOREARM | 0.8058 | 0.9042 | 0.6139 |
-| XR_HAND | 0.8030 | 0.8500 | 0.5627 |
-| XR_FINGER | 0.7636 | 0.8312 | 0.5232 |
-| XR_HUMERUS | 0.8584 | 0.9066 | 0.7169 |
-| XR_ELBOW | 0.7909 | 0.8886 | 0.5796 |
-
-Вывод из ноутбука: уже на baseline DenseNet заметно превзошла предыдущие ML-эксперименты.
-
-### DenseNet с учётом дисбаланса классов
-
-Настройка:
-
-- архитектура как в baseline;
-- `pos_weight = neg / pos = 1.1296703296703297`;
-- loss: `BCEWithLogitsLoss(pos_weight=...)`;
-- сохранение модели: `weighted_DenseNet.pth`.
-
-Лучший threshold:
-
-- `0.40703517587939697`.
-
-Итоговые метрики:
-
-| Accuracy | AUC | Kappa |
-|---:|---:|---:|
-| 0.8122 | 0.8728 | 0.6232 |
-
-Метрики по анатомиям:
-
-| Категория | Accuracy | AUC | Kappa |
-|---|---:|---:|---:|
-| XR_WRIST | 0.8478 | 0.9093 | 0.6916 |
-| XR_SHOULDER | 0.7963 | 0.8783 | 0.5942 |
-| XR_FOREARM | 0.8544 | 0.8996 | 0.7093 |
-| XR_HAND | 0.8030 | 0.8369 | 0.5806 |
-| XR_FINGER | 0.7515 | 0.8098 | 0.5024 |
-| XR_HUMERUS | 0.8142 | 0.8893 | 0.6275 |
-| XR_ELBOW | 0.8364 | 0.9124 | 0.6722 |
-
-Вывод: учёт дисбаланса улучшил `XR_FOREARM`, `XR_HAND` и `XR_ELBOW`, но ухудшил общий kappa относительно baseline.
-
-### DenseNet с разморозкой двух последних блоков
-
-Настройка:
-
-- `DenseNet121`;
-- разморожены `features.denseblock3` и `features.denseblock4`;
-- classifier обучается отдельно;
-- optimizer:
-  - параметры feature-блоков: learning rate `1e-6`;
-  - classifier: learning rate `1e-5`;
-- сохранение модели: `blocks2_DenseNet.pth`.
-
-Лучший threshold:
-
-- `0.48743718592964824`.
-
-Итоговые метрики:
-
-| Accuracy | AUC | Kappa |
-|---:|---:|---:|
-| 0.8184 | 0.8756 | 0.6316 |
-
-Метрики по анатомиям:
-
-| Категория | Accuracy | AUC | Kappa |
-|---|---:|---:|---:|
-| XR_WRIST | 0.8804 | 0.9222 | 0.7510 |
-| XR_SHOULDER | 0.7840 | 0.8778 | 0.5670 |
-| XR_FOREARM | 0.8252 | 0.9008 | 0.6529 |
-| XR_HAND | 0.7955 | 0.8445 | 0.5473 |
-| XR_FINGER | 0.7697 | 0.8269 | 0.5357 |
-| XR_HUMERUS | 0.8496 | 0.9094 | 0.6990 |
-| XR_ELBOW | 0.8273 | 0.8803 | 0.6525 |
-
-Вывод из ноутбука на этом этапе:
-
-- baseline лучше для `XR_SHOULDER` и `XR_HUMERUS`;
-- weighted loss лучше для `XR_FOREARM`, `XR_HAND`, `XR_ELBOW`;
-- 2 blocks лучше для `XR_WRIST` и `XR_FINGER`.
-
-### Аугментация для проседающих анатомий
-
-Слабыми категориями были выбраны:
-
-- `XR_SHOULDER`
-- `XR_HAND`
-- `XR_FINGER`
-
-Для них добавлены более выраженные преобразования:
-
-- horizontal flip;
-- rotation до 10 градусов;
-- random affine translate `(0.03, 0.03)`;
-- color jitter по brightness и contrast `0.05`.
-
-Для остальных категорий применялись обычные `RandomHorizontalFlip`, `RandomRotation`, `ToTensor`, `Normalize`.
-
-Архитектура: DenseNet121 с размороженными `denseblock3` и `denseblock4`.
-
-Сохранение модели: `augm_DenseNet.pth`.
-
-Лучший threshold:
-
-- `0.4120603015075377`.
-
-Итоговые метрики:
-
-| Accuracy | AUC | Kappa |
-|---:|---:|---:|
-| 0.7936 | 0.8628 | 0.5818 |
-
-Метрики по анатомиям:
-
-| Категория | Accuracy | AUC | Kappa |
-|---|---:|---:|---:|
-| XR_WRIST | 0.8207 | 0.8859 | 0.6284 |
-| XR_SHOULDER | 0.7716 | 0.8699 | 0.5442 |
-| XR_FOREARM | 0.8252 | 0.8992 | 0.6525 |
-| XR_HAND | 0.7424 | 0.8162 | 0.4174 |
-| XR_FINGER | 0.7758 | 0.8321 | 0.5477 |
-| XR_HUMERUS | 0.8319 | 0.9185 | 0.6633 |
-| XR_ELBOW | 0.8000 | 0.8879 | 0.5969 |
-
-Вывод: аугментация дала небольшое улучшение только для `XR_FINGER`, но общий результат заметно просел.
-
-### Oversampling слабых анатомий
-
-Настройка:
-
-- слабые категории: `XR_SHOULDER`, `XR_HAND`, `XR_FINGER`;
-- `WeightedRandomSampler`;
-- вес `2.0` для слабых категорий;
-- вес `1.0` для остальных;
-- архитектура DenseNet121 с размороженными `denseblock3` и `denseblock4`;
-- сохранение модели: `sampler_DenseNet.pth`.
-
-Лучший threshold:
-
-- `0.4170854271356784`.
-
-Итоговые метрики:
-
-| Accuracy | AUC | Kappa |
-|---:|---:|---:|
-| 0.8142 | 0.8698 | 0.6246 |
-
-Метрики по анатомиям:
-
-| Категория | Accuracy | AUC | Kappa |
-|---|---:|---:|---:|
-| XR_WRIST | 0.8533 | 0.9172 | 0.6960 |
-| XR_SHOULDER | 0.8210 | 0.8926 | 0.6425 |
-| XR_FOREARM | 0.8350 | 0.8838 | 0.6713 |
-| XR_HAND | 0.7803 | 0.8238 | 0.5107 |
-| XR_FINGER | 0.7758 | 0.8437 | 0.5486 |
-| XR_HUMERUS | 0.8230 | 0.8937 | 0.6454 |
-| XR_ELBOW | 0.8091 | 0.8528 | 0.6167 |
-
-Вывод: oversampling лучше аугментации по overall kappa, но всё ещё ниже baseline и 2-block модели с обычным threshold-подбором.
-
-### Adaptive threshold по анатомиям
-
-В финальном эксперименте загружается модель `blocks2_DenseNet.pth`, затем threshold подбирается отдельно для каждой анатомии.
-
-Итог:
-
-| Метрика | Значение |
-|---|---:|
-| Total kappa | 0.6622 |
-
-Метрики по анатомиям после применения индивидуальных threshold:
-
-| Категория | Accuracy | AUC | Kappa |
-|---|---:|---:|---:|
-| XR_WRIST | 0.8804 | 0.9222 | 0.7510 |
-| XR_SHOULDER | 0.8086 | 0.8778 | 0.6186 |
-| XR_FOREARM | 0.8641 | 0.9008 | 0.7279 |
-| XR_HAND | 0.8106 | 0.8445 | 0.5883 |
-| XR_FINGER | 0.7879 | 0.8269 | 0.5703 |
-| XR_HUMERUS | 0.8584 | 0.9094 | 0.7169 |
-| XR_ELBOW | 0.8273 | 0.8803 | 0.6527 |
-
-Это лучший DenseNet-результат в ноутбуке по total kappa, но threshold подбирается и оценивается на одном и том же validation set. Поэтому результат может быть оптимистичным; для честной оценки нужен отдельный hold-out или cross-validation threshold-подбор.
-
-## DenseNet: сравнение kappa по анатомиям
+### Kappa по анатомиям
 
 | Категория | Baseline | Weighted | 2 blocks | Augmented | Sampler | Adaptive threshold |
 |---|---:|---:|---:|---:|---:|---:|
@@ -439,20 +58,264 @@ df_images["unique_study_id"] = df_images["patient_id"] + "_" + df_images["study_
 | XR_HUMERUS | 0.7169 | 0.6275 | 0.6990 | 0.6633 | 0.6454 | 0.7169 |
 | XR_ELBOW | 0.5796 | 0.6722 | 0.6525 | 0.5969 | 0.6167 | 0.6527 |
 
-## Итоговое сравнение
+Вывод по DenseNet: baseline уже дал сильный результат относительно ML-подходов. Усложнение разморозки до двух блоков помогло отдельным анатомиям (`XR_WRIST`, `XR_FINGER`), но не улучшило overall kappa относительно baseline. Weighted loss и oversampling улучшали часть дисбалансных анатомий, но не дали устойчивого overall-прироста. Лучшее число `0.6622` получено через per-anatomy threshold, однако этот threshold подбирался и оценивался на одном validation set, поэтому результат может быть оптимистичным.
 
-| Направление | Лучший результат | Kappa | Комментарий |
-|---|---|---:|---|
-| DINOv2 | SimpleMURA DINOv2-Large без TTA | 0.6874 | Лучший общий результат среди двух ноутбуков, но метрика считается по validation-строкам DINOv2 pipeline |
-| DenseNet | Adaptive threshold поверх `blocks2_DenseNet.pth` | 0.6622 | Лучший DenseNet-результат, но threshold подобран на том же validation set |
-| DenseNet без per-anatomy threshold | Baseline DenseNet121 | 0.6355 | Лучший честный DenseNet-вариант из основных экспериментов |
+## ResNet50 / ResNet101
 
-Общий вывод:
+Источник: [DL_Experiments_RESNET_collab_ver_3.ipynb](./DL_Experiments_RESNET_collab_ver_3.ipynb)
 
-- DINOv2 v3 дал самый высокий reported kappa: `0.6874`.
-- DenseNet baseline оказался сильной и простой отправной точкой: `0.6355`.
-- Подбор индивидуальных thresholds для DenseNet поднял kappa до `0.6622`, но требует более строгой валидации.
-- Аугментация слабых анатомий в текущем виде ухудшила overall качество.
-- Oversampling слабых анатомий оказался лучше targeted augmentation, но не превзошёл baseline.
-- Самые проблемные категории в обоих направлениях остаются `XR_HAND`, `XR_FINGER` и `XR_SHOULDER`.
+### Общий pipeline
 
+- Размер изображений: 224x224.
+- Train: `36,808` изображений, `13,457` studies.
+- Original `valid/` используется как финальный test: `3,197` изображений, `1,199` studies.
+- Из `train/` выделяется internal validation по `study` через `GroupShuffleSplit(test_size=0.10)`.
+- Fit train: `33,143` изображений, `12,111` studies.
+- Internal validation: `3,665` изображений, `1,346` studies.
+- Study leakage: `0`.
+- Batch size в Colab: `750`.
+- Epochs: `30`.
+- Loss: `BCEWithLogitsLoss(pos_weight=1.457)`.
+- Optimizer: `AdamW(weight_decay=1e-4)`.
+- Scheduler: `ReduceLROnPlateau(mode="max", factor=0.5, patience=1)`.
+- Scheduler оптимизирует по kappa, лучшая модель подбирается по composite metric: `0.3 * kappa + 0.5 * PR-AUC + 0.2 * ROC-AUC`.
+
+Train augmentation для ResNet50/101:
+
+- `Grayscale(num_output_channels=3)`;
+- `RandomResizedCrop(224, scale=(0.85, 1.0), ratio=(0.90, 1.10))`;
+- `RandomHorizontalFlip(0.5)`;
+- `RandomRotation(7)`;
+- `RandomAffine(translate=(0.04, 0.04), scale=(0.95, 1.05))`;
+- `ColorJitter(brightness=0.12, contrast=0.18)`;
+- ImageNet normalization.
+
+### Эксперименты
+
+| Эксперимент | Модель | Стратегия fine-tuning | LR |
+|---|---|---|---|
+| `resnet_50_aug` | ResNet50 ImageNet | 1 эпоха только `fc`, затем разморозка всей сети | head `2e-3`, затем all `6e-4` |
+| `resnet_50_no_aug` | ResNet50 ImageNet | То же, но без train-аугментаций | head `2e-3`, затем all `6e-4` |
+| `resnet_101_aug` | ResNet101 ImageNet | 3 эпохи только `fc`, затем backbone/head с разными LR | backbone `1e-5`, head `3e-4` |
+| `resnet_50_aug_differential_lr` | ResNet50 ImageNet | Вся сеть обучается сразу, backbone медленнее head | backbone `2e-4`, head `2e-3` |
+| `resnet_50_aug_gradual_unfreeze` | ResNet50 ImageNet | Постепенная разморозка `layer4 -> layer3 -> layer2 -> layer1 -> conv1/bn1` | backbone `2e-4`, head `2e-3` |
+| `resnet_50_aug_discriminative_lr` | ResNet50 ImageNet | Разные LR по стадиям ResNet | stem `4e-5`, layer1 `1e-4`, layer2 `2e-4`, layer3 `6e-4`, layer4 `1.2e-3`, head `2e-3` |
+
+### Study-level test
+
+Threshold подбирался на internal validation, затем применялся к original `valid/` как test.
+
+| Модель | Threshold | Studies | Study accuracy | Study kappa |
+|---|---:|---:|---:|---:|
+| `resnet_50_aug` | 0.4789 | 1199 | 0.8490 | 0.6918 |
+| `resnet_50_no_aug` | 0.5211 | 1199 | 0.8357 | 0.6620 |
+| `resnet_50_aug_differential_lr` | 0.4789 | 1199 | 0.8357 | 0.6613 |
+| `resnet_50_aug_gradual_unfreeze` | 0.4368 | 1199 | 0.8299 | 0.6526 |
+| `resnet_50_aug_discriminative_lr` | 0.4368 | 1199 | 0.8274 | 0.6452 |
+| `resnet_101_aug` | 0.4789 | 1199 | 0.7998 | 0.5845 |
+
+Итоговая test heatmap kappa из ноутбука:
+
+![ResNet test kappa heatmap](./doc.files/dl_experiments/resnet_kappa_heatmap_3.png)
+
+Дополнительно из того же output сохранены heatmap для [train](./doc.files/dl_experiments/resnet_kappa_heatmap_1.png) и [internal validation](./doc.files/dl_experiments/resnet_kappa_heatmap_2.png); в основной отчёт вставлена test-heatmap как финальная оценка.
+
+Kappa лучшей ResNet-модели `resnet_50_aug` по анатомиям:
+
+| Категория | Study kappa |
+|---|---:|
+| XR_ELBOW | 0.761 |
+| XR_FINGER | 0.642 |
+| XR_FOREARM | 0.665 |
+| XR_HAND | 0.626 |
+| XR_HUMERUS | 0.793 |
+| XR_SHOULDER | 0.609 |
+| XR_WRIST | 0.740 |
+
+Вывод по ResNet: лучший вариант - простой `ResNet50 + augmentation + freeze -> full unfreeze`. Он оказался лучше более сложных LR-схем. Вероятная причина: для 224x224 MURA достаточно pretrained CNN-признаков и аккуратной полной адаптации после короткого head warm-up. ResNet101 ухудшил результат: модель глубже, но при том же объёме данных и дисбалансе её recall оказался ниже, а conservative LR для backbone не дал лучшей адаптации.
+
+## DINOv2-Large SimpleMURA
+
+Источник: [DL_Experiments_MURA_DINOv2_Adapters_v3.ipynb](./DL_Experiments_MURA_DINOv2_Adapters_v3.ipynb)
+
+### Общий pipeline
+
+- Среда: Google Colab.
+- GPU в output: NVIDIA L4, VRAM `23.7 GB`.
+- Данные: `MURA-448x448.zip`.
+- Размер изображений: 448x448.
+- Train: `36,808` изображений.
+- Validation: `3,197` изображений.
+- Batch size: `8`.
+- Gradient accumulation: `16`.
+- Effective batch size: `128`.
+- Train loader: `4601` батчей, val loader: `400` батчей.
+- Epochs: `15`.
+- `POS_WEIGHT`: `1.475`.
+
+### Архитектура
+
+- Backbone: `dinov2-large`, 307M параметров.
+- DINOv2 изначально полностью заморожен.
+- Используется CLS-токен `last_hidden_state[:, 0, :]`.
+- Общая голова:
+  - `Linear(1024, 256)`;
+  - `LayerNorm(256)`;
+  - `GELU`;
+  - `Dropout(0.3)`;
+  - `Linear(256, 64)`;
+  - `GELU`;
+  - `Dropout(0.2)`.
+- Для каждой анатомии отдельный `Linear(64, 2)`.
+
+### Аугментации, loss и оптимизация
+
+Слабые категории: `XR_FINGER`, `XR_HAND`, `XR_SHOULDER`, `XR_FOREARM`.
+
+Для слабых категорий использовались сильные medical augmentations: horizontal flip, rotation до 20 градусов, affine scale/translate, elastic transform, CLAHE, gamma, brightness/contrast, noise, blur. Для остальных - более мягкие flip/rotation/CLAHE/gamma/brightness/contrast.
+
+Балансировка:
+
+| Категория | Loss/sampler weight |
+|---|---:|
+| XR_FINGER | 1.5 |
+| XR_HAND | 1.5 |
+| XR_SHOULDER | 1.3 |
+| XR_FOREARM | 1.2 |
+| XR_ELBOW | 1.0 |
+| XR_HUMERUS | 1.0 |
+| XR_WRIST | 1.0 |
+
+Loss: `ProgressiveLoss`.
+
+- Эпохи 1-5: BCE с label smoothing `0.1`.
+- Эпохи 6-9: смесь BCE и focal loss.
+- Эпохи 10-15: focal loss, `gamma=1.5`.
+
+Optimizer и scheduler:
+
+- `AdamW`;
+- LR `1e-3` для head и per-bone classifiers;
+- weight decay `0.01`;
+- `CosineAnnealingLR`;
+- AMP mixed precision;
+- gradient clipping `1.0`;
+- early stopping patience `5`.
+
+План разморозки DINOv2:
+
+| Эпоха | Разморожено блоков | Обучаемых параметров |
+|---:|---:|---:|
+| 6 | последние 4 | 50.7M |
+| 9 | последние 8 | 101.1M |
+| 12 | последние 12 | 151.5M |
+
+Для размороженных DINOv2-параметров добавлялся LR `1e-6`.
+
+### Динамика обучения
+
+| Эпоха | Loss phase | Loss | Overall kappa | AUC | Accuracy | Время |
+|---:|---|---:|---:|---:|---:|---:|
+| 1 | BCE | 0.9650 | 0.4298 | 0.7892 | 0.7172 | 19.6 мин |
+| 2 | BCE | 0.9052 | 0.5076 | 0.8233 | 0.7563 | 19.5 мин |
+| 3 | BCE | 0.8832 | 0.5311 | 0.8361 | 0.7670 | 19.5 мин |
+| 4 | BCE | 0.8776 | 0.5397 | 0.8370 | 0.7710 | 19.5 мин |
+| 5 | BCE | 0.8644 | 0.5481 | 0.8443 | 0.7754 | 19.5 мин |
+| 6 | Mix | 0.8494 | 0.5786 | 0.8610 | 0.7898 | 25.3 мин |
+| 7 | Mix | 0.6865 | 0.6217 | 0.8772 | 0.8120 | 25.3 мин |
+| 8 | Mix | 0.5419 | 0.6256 | 0.8822 | 0.8136 | 25.3 мин |
+| 9 | Mix | 0.4022 | 0.6462 | 0.8886 | 0.8236 | 31.3 мин |
+| 10 | Focal | 0.2547 | 0.6587 | 0.8943 | 0.8305 | 31.0 мин |
+| 11 | Focal | 0.2509 | 0.6712 | 0.8933 | 0.8364 | 31.1 мин |
+| 12 | Focal | 0.2467 | 0.6719 | 0.9016 | 0.8370 | 37.1 мин |
+| 13 | Focal | 0.2405 | 0.6796 | 0.9038 | 0.8408 | 37.0 мин |
+| 14 | Focal | 0.2391 | 0.6832 | 0.9046 | 0.8427 | 37.1 мин |
+| 15 | Focal | 0.2332 | 0.6874 | 0.9040 | 0.8445 | 37.1 мин |
+
+Суммарное время по сохранённым логам: около `415.2` минут, то есть `6.9` часа.
+
+### Финальная оценка без TTA
+
+В коде реализован TTA, но в сохранённом output нет завершённой таблицы TTA; финальная модель сохранена как `No TTA`.
+
+Таблица ниже актуализирована по [final_metrics_report.csv](./final_metrics_report.csv).
+
+| Категория | v1 κ | v3 κ | AUC | F1 | Accuracy | Порог | N | Δ κ |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| XR_WRIST | 0.7118 | 0.7380 | 0.9226 | 0.8444 | 0.8725 | 0.56 | 659 | +0.0262 |
+| XR_ELBOW | 0.7202 | 0.7457 | 0.9284 | 0.8599 | 0.8731 | 0.57 | 465 | +0.0255 |
+| XR_SHOULDER | 0.5664 | 0.6092 | 0.8655 | 0.8036 | 0.8046 | 0.49 | 563 | +0.0428 |
+| XR_FINGER | 0.5371 | 0.6442 | 0.8812 | 0.8285 | 0.8221 | 0.48 | 461 | +0.1071 |
+| XR_FOREARM | 0.6813 | 0.7675 | 0.9311 | 0.8763 | 0.8837 | 0.49 | 301 | +0.0862 |
+| XR_HUMERUS | 0.7156 | 0.7846 | 0.9257 | 0.8897 | 0.8924 | 0.58 | 288 | +0.0690 |
+| XR_HAND | 0.5646 | 0.6164 | 0.8686 | 0.7500 | 0.8217 | 0.46 | 460 | +0.0518 |
+| OVERALL | 0.6348 | 0.6874 | 0.9040 | 0.8304 | 0.8445 | 0.49 | 3197 | +0.0526 |
+
+Итоговый график из ноутбука:
+
+![DINOv2 v3 results](./doc.files/dl_experiments/dinov2_v3_results.png)
+
+Вывод по DINOv2: модель улучшила предыдущую версию `v1` по всем анатомиям, особенно `XR_FINGER` (`+0.1071`), `XR_FOREARM` (`+0.0862`) и `XR_HUMERUS` (`+0.0690`). При этом цель `0.80` overall kappa не достигнута: итоговый kappa `0.6874`. Качество высокое, но цена обучения существенно выше CNN-моделей: 448x448, DINOv2-Large, gradient accumulation и постепенная разморозка дают почти 7 часов по логам.
+
+## Сравнение времени и вычислительной цены
+
+| Модель | Размер входа | Epochs | Batch / effective batch | Scheduler | Зафиксированное время |
+|---|---:|---:|---:|---|---|
+| DenseNet121 | 224x224 в текущем `DATA_ROOT` | до 20 | 64 / 64 | нет | wall-clock не сохранён; 533 train + 48 val batch за эпоху, примерно 7 минут на эпоху, 20 эпох |
+| ResNet50/101 | 224x224 | 30 | 750 / 750 в Colab | `ReduceLROnPlateau` | wall-clock не сохранён в history; сохранены 30 эпох и LR-динамика |
+| DINOv2-Large | 448x448 | 15 | 8 / 128 | `CosineAnnealingLR` | `415.2` мин, примерно `6.9` часа |
+
+Точное wall-clock сравнение для DenseNet и ResNet невозможно восстановить из сохранённых outputs: в ноутбуках нет persisted `elapsed/time_min` колонок. По вычислительной цене DINOv2 явно самый тяжёлый вариант; ResNet50 даёт сопоставимое качество на 224x224 и проще для инференса.
+
+## Общее сравнение baseline, ML и DL
+
+ML-строки взяты из сохранённых `results/*.csv`, DL-строки - из ноутбуков выше. Для ML время в таблице - это `fit_time_seconds` из CSV, то есть время подбора/обучения классификатора после подготовки признаков; время извлечения HOG/PCA-признаков туда не входит.
+
+| Направление | Подход | Уровень оценки | Accuracy | AUC | Kappa | Время обучения |
+|---|---|---|---:|---:|---:|---:|
+| Baseline ML | `LogisticRegression_Fixed_all` | overall valid | 0.5688 | 0.5838 | 0.1387 | 40m |
+| Best ML overall | `hog_pca_poly_logreg_all`, PCA=50, `C=0.001` | overall valid | 0.6572 | 0.7165 | 0.3137 | 2h |
+| DenseNet121 | Baseline `denseblock4 + classifier` | study-level valid | 0.8204 | 0.8817 | 0.6355 | нет wall-clock |
+| DenseNet121 | `blocks2` + per-anatomy threshold | study-level valid | - | - | 0.6622 | нет wall-clock |
+| ResNet50 | augmentation + freeze -> unfreeze | study-level test | 0.8490 | - | 0.6918 | ~15m |
+| DINOv2-Large | SimpleMURA, No TTA | image-level valid | 0.8445 | 0.9040 | 0.6874 | ~7h |
+
+## Лучшее DL-решение
+
+Если ориентироваться на study-level оценку, лучшим DL-решением в текущих экспериментах является `ResNet50 + augmentation + freeze -> full unfreeze`: study-level kappa `0.6918`, accuracy `0.8490`, threshold `0.4789`.
+
+Если сравнивать только image-level строки, лучший результат показывает DINOv2-Large SimpleMURA: kappa `0.6874`, AUC `0.9040`, accuracy `0.8445`. Он немного уступает ResNet50 study-level kappa, но это не строго одинаковая метрика из-за разного уровня агрегации.
+
+Почему ResNet50 оказался сильнее более сложных ResNet-стратегий:
+
+- Аугментация дала устойчивую регуляризацию: `resnet_50_aug` лучше `resnet_50_no_aug` на study-level kappa `0.6918` против `0.6620`.
+- Простая схема warm-up head -> full unfreeze лучше подошла под pretrained CNN: модель быстро адаптировала все уровни признаков после первой эпохи.
+- Differential/gradual/discriminative LR оказались сложнее, но не лучше: они либо слишком ограничивали адаптацию ранних слоёв, либо не давали преимуществ сверх обычного LR-drop scheduler.
+- ResNet101 добавил ёмкость, но не качество: на test у него study-level kappa `0.5845`, image-level recall `0.6294`; это похоже на недоадаптацию/переусложнение для текущего объёма и дисбаланса данных.
+
+Почему DL лучше ML в этой задаче:
+
+- Лучший overall ML (`hog_pca_poly_logreg_all`) достиг kappa `0.3137`, тогда как CNN/transformer-подходы дают `0.63-0.69`.
+- HOG/PCA и линейные модели теряют часть пространственных и текстурных признаков, важных для переломов и патологий.
+- Pretrained CNN/transformer backbone переносит сильные визуальные признаки и дообучается на MURA, поэтому лучше работает с вариативностью анатомий, яркости, позиций и качества снимков.
+
+## W&B и bootstrap
+
+После экспериментов добавлен flow публикации моделей в Weights & Biases:
+
+- скрипт: [scripts/publish_models_to_wandb.py](./scripts/publish_models_to_wandb.py);
+- команда запуска была `scripts/publish_models_to_wandb.py --models-dir models`;
+- опубликовано `117` файлов из `models/`;
+- среди опубликованных DL-весов: `base_DenseNet.pth`, `weighted_DenseNet.pth`, `blocks2_DenseNet.pth`, `augm_DenseNet.pth`, `sampler_DenseNet.pth`, `resnet50_mura_best.pt`, `resnet50_mura_no_aug_best.pt`, `resnet101_mura_best.pt`, `resnet50_mura_differential_lr_best.pt`, `resnet50_mura_gradual_unfreeze_best.pt`, `resnet50_mura_discriminative_lr_best.pt`.
+
+DINOv2-ноутбук сохранял inference checkpoint в Colab Drive: `/content/drive/MyDrive/MURA_v3/checkpoints/inference/mura_dinov2_complete.pt`. В текущем локальном `models/` DINOv2 checkpoint не был предоставлен, поэтому отсутствует в W&B.
+
+Также обновлено bootstrap-меню проекта:
+
+- в [bootstrap.sh](./bootstrap.sh) добавлена функция `publish_models_to_wandb`;
+- в `MENU_ACTIONS` добавлен пункт `publish_models_to_wandb`;
+- в `menu_label` пункт отображается как `Publish models to W&B`;
+- Меню теперь интерактивное и показывает статус сервиса, а также позволяет запустить/остановить jupyter+frontend+backend
+- Были добавлены зависимости, испльзуемые в обучении DL моделей
+
+Веса моделей теперь можно публиковать в W&B прямо из интерактивного `bootstrap.sh`-меню, без ручного запуска Python-скрипта.
