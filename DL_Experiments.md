@@ -23,7 +23,7 @@
 ## Общее описание экспериментов и юпитер-тетрадок
 
 Основные ноутбуки:
-
+- [DL_Experiments_CNN_baseline3.ipynb](./DL_Experiments_CNN_baseline3.ipynb)
 - [DL_Experiments_densenet.ipynb](./DL_Experiments_densenet.ipynb)
 - [DL_Experiments_RESNET_collab_ver_3.ipynb](./DL_Experiments_RESNET_collab_ver_3.ipynb)
 - [DL_Experiments_MURA_DINOv2_Adapters_v3.ipynb](./DL_Experiments_MURA_DINOv2_Adapters_v3.ipynb)
@@ -31,6 +31,57 @@
 Основная метрика(как и прежде): **Cohen's kappa**. Дополнительно считались accuracy, ROC-AUC, PR-AUC и F1.
 
 Важное замечание для сравнения: DenseNet и ResNet считают основную финальную метрику на уровне исследования (`study`): вероятности снимков одного исследования агрегируются, после чего считается kappa. DINOv2 в сохранённом output оценивается по строкам `valid.csv`, то есть по изображениям. Поэтому DINOv2 и study-level модели сравнимы по направлению качества, но не идеально один-в-один.
+## Custom CNN Baseline (C3 / C5 / C5Res)
+
+### Общий pipeline
+
+- Данные: MURA-enhanced, 224×224, grayscale (1 канал).
+- Train: ~36,808 изображений, Valid: ~3,197 изображений.
+- Study-level агрегация: unique_study_id = patient_id + "_" + study_id; вероятности снимков одного исследования усредняются - перед расчётом kappa.
+- Batch size: 64 (тестировались 96/128/192 для оценки влияния на стабильность).
+- Epochs: 15.
+- Loss: BCEWithLogitsLoss(pos_weight=1.457) — вес подобран по дисбалансу классов в трейне.
+- Optimizer: Adam(lr=3e-4), scheduler не использовался.
+- Аугментации (train): RandomHorizontalFlip, RandomRotation(10), ToTensor.
+- Валидация: без аугментаций, только Resize + ToTensor.
+- Метрики: Cohen's kappa (study-level и image-level), accuracy, порог подбирался перебором на валидации (thr ∈ [0.30, 0.70]).
+- Оптимизации: pin_memory=True, non_blocking=True, torch.inference_mode(), zero_grad(set_to_none=True).
+
+### Архитектуры
+#### C3 (3 сверточных слоя)
+Простая архитектура с тремя сверточными слоями:
+- Conv(1→32) → Conv(32→64) → Conv(64→128)
+- MaxPool(2) после каждого слоя
+- AdaptiveAvgPool + FC(128→1)
+- **Параметров:** ~2.1M
+
+#### C5 (5 сверточных блоков)
+Более глубокая сеть с batch normalization и dropout:
+- 5 блоков: Conv + BatchNorm + ReLU + MaxPool + Dropout(0.2)
+- Progressive увеличение каналов: 32→64→128→256→256
+- AdaptiveAvgPool + FC(256→1)
+- **Параметров:** ~4.8M
+
+#### C5Res (C5 с residual связью)
+Модификация C5 с skip-connection:
+- Аналогична C5, но с residual связью после 2-го пулинга
+- Projection shortcut: AvgPool(4) + Conv1x1 для согласования размерностей
+- **Параметров:** ~4.9M
+
+### Результаты эксперименотов
+Анатомия        |  C3    |   C5   | C5Res  |
+----------------|--------|--------|--------|
+XR_ELBOW        | 0.346  | 0.321  | 0.287  |
+XR_FINGER       | 0.457  | 0.373  | 0.402  |
+XR_FOREARM      | 0.190  | 0.545  | 0.382  |
+XR_HAND         | 0.300  | 0.277  | 0.282  |
+XR_HUMERUS      | 0.062  | 0.453  | 0.257  |
+XR_SHOULDER     | 0.066  | 0.236  | 0.306  |
+XR_WRIST        | 0.268  | 0.467  | 0.385  |
+![alt text](image.png)
+![alt text](image-1.png)
+### Вывод 
+Использование даже неглубоких сверток дает сильные результаты в сравнении с ML-подходами и дает лучшие метрики. Несмотря на то, что даже тут можно еще использовать аугментации, нарастить глубину для улучшения результатов, разумно продолжить эксперименты с предобученными моделями для достижения лучшего результата.
 
 ## DenseNet121
 
