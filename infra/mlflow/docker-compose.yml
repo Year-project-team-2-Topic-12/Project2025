@@ -1,0 +1,95 @@
+services:
+  postgres:
+    image: postgres:16.2
+    container_name: project2025-mlflow-postgres
+    env_file:
+      - ./.env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mlflow
+
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: project2025-mlflow-minio
+    env_file:
+      - ./.env
+    ports:
+      - "${S3_API_PORT:-9000}:9000"
+      - "${S3_UI_PORT:-9001}:9001"
+    volumes:
+      - ./data/minio:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - mlflow
+
+  minio-create-bucket:
+    image: quay.io/minio/mc:latest
+    container_name: project2025-mlflow-minio-mc
+    env_file:
+      - ./.env
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD};
+      mc mb --ignore-existing local/${DEFAULT_BUCKET_NAME};
+      mc anonymous set none local/${DEFAULT_BUCKET_NAME};
+      "
+    networks:
+      - mlflow
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.15.1
+    container_name: project2025-mlflow-server
+    env_file:
+      - ./.env
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-create-bucket:
+        condition: service_completed_successfully
+    ports:
+      - "${MLFLOW_PORT:-5050}:5000"
+    volumes:
+      - ./data/mlflow:/mlflow
+    command:
+      - /bin/bash
+      - -lc
+      - |
+        pip install --quiet boto3 psycopg2-binary
+        mlflow server \
+          --host 0.0.0.0 \
+          --port 5000 \
+          --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB} \
+          --default-artifact-root s3://${DEFAULT_BUCKET_NAME}/mlflow \
+          --artifacts-destination s3://${DEFAULT_BUCKET_NAME}/mlflow \
+          --serve-artifacts \
+          --gunicorn-opts "--timeout 1200 --graceful-timeout 1200 --workers 2"
+    networks:
+      - mlflow
+
+networks:
+  mlflow:
+    driver: bridge
