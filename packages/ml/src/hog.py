@@ -4,7 +4,7 @@ from skimage import io
 from skimage.feature import hog
 import pandas as pd
 from .data import get_data_path
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from typing import Sequence
 import glob
 import os
@@ -204,7 +204,7 @@ def prepare_data_for_anatomy(base_df: pd.DataFrame, anatomy, get_all=False, is_i
             }
         else:
             data = create_andor_return_hog_data(base_df, anatomy=anatomy, is_images=is_images)
-        X = data['X']
+        X = data['X'].astype(np.float32)
         y = data['y']
         splits = data['splits']
 
