@@ -223,4 +223,9 @@ mlflow-example/*
 infra/.env
 notes.md
 !docs/*
+
+# Keep docs artifacts
+!docs/
+!docs/artifacts/
+!docs/artifacts/**
 infra/mlflow/data*
