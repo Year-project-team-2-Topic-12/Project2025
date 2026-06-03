@@ -223,3 +223,4 @@ mlflow-example/*
 infra/.env
 notes.md
 !docs/*
+infra/mlflow/data*
