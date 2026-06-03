@@ -40,7 +40,7 @@ services:
       - mlflow
 
   minio-create-bucket:
-    image: quay.io/minio/mc:latest
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
     container_name: project2025-mlflow-minio-mc
     env_file:
       - ./.env
