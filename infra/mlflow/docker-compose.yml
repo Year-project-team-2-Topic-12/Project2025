@@ -78,7 +78,7 @@ services:
       - /bin/bash
       - -lc
       - |
-        pip install --quiet boto3 psycopg2-binary
+        pip install --quiet "boto3==1.43.14" "psycopg2-binary>=2.9,<3"
         mlflow server \
           --host 0.0.0.0 \
           --port 5000 \
