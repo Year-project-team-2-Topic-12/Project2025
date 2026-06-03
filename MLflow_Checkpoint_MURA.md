@@ -4,7 +4,7 @@
 - [Общее описание checkpoint](#общее-описание-checkpoint)
 - [Финальная модель](#финальная-модель)
 - [Инфраструктура MLflow](#инфраструктура-mlflow)
-- [Основной MLflow notebook](#основной-MLflow-notebook)
+- [Основной MLflow notebook](#основной-mlflow-notebook)
 - [Логирование экспериментов в MLflow](#логирование-экспериментов-в-mlflow)
   - [Параметры](#параметры)
   - [Метрики](#метрики)
@@ -264,7 +264,7 @@ kappa: 0.3137 → 0.700 study-level
 
 ## Проверка на устойчивость
 
-Подробный анализ устойчивости описан в [robustness_analysis.md]()
+Подробный анализ устойчивости описан в [robustness_analysis.md](https://github.com/Year-project-team-2-Topic-12/Project2025/blob/mlflow-leo/docs/robustness_analysis.md)
 Для проверки устойчивости использовались простые искажения входных изображений:
 
 - увеличение яркости;
