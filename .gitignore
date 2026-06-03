@@ -228,3 +228,4 @@ notes.md
 !docs/
 !docs/artifacts/
 !docs/artifacts/**
+infra/mlflow/data*
