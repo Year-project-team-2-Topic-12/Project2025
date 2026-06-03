@@ -1,16 +1,24 @@
 # DL experiments по MURA
 - [DL experiments по MURA](#dl-experiments-по-mura)
   - [Общее описание экспериментов и юпитер-тетрадок](#общее-описание-экспериментов-и-юпитер-тетрадок)
-  - [DenseNet121](#densenet121)
+  - [Custom CNN Baseline (C3 / C5 / C5Res)](#custom-cnn-baseline-c3--c5--c5res)
     - [Общий pipeline](#общий-pipeline)
+    - [Архитектуры](#архитектуры)
+      - [C3 (3 сверточных слоя)](#c3-3-сверточных-слоя)
+      - [C5 (5 сверточных блоков)](#c5-5-сверточных-блоков)
+      - [C5Res (C5 с residual связью)](#c5res-c5-с-residual-связью)
+    - [Результаты экспериментов](#результаты-эксперименотов)
+    - [Вывод](#вывод)
+  - [DenseNet121](#densenet121)
+    - [Общий pipeline](#общий-pipeline-1)
     - [Эксперименты](#эксперименты)
     - [Kappa по анатомиям](#kappa-по-анатомиям)
   - [ResNet50 / ResNet101](#resnet50--resnet101)
-    - [Общий pipeline](#общий-pipeline-1)
+    - [Общий pipeline](#общий-pipeline-2)
     - [Эксперименты](#эксперименты-1)
     - [Study-level test](#study-level-test)
   - [DINOv2-Large SimpleMURA](#dinov2-large-simplemura)
-    - [Общий pipeline](#общий-pipeline-2)
+    - [Общий pipeline](#общий-pipeline-3)
     - [Архитектура](#архитектура)
     - [Аугментации, loss и оптимизация](#аугментации-loss-и-оптимизация)
     - [Динамика обучения](#динамика-обучения)
@@ -23,10 +31,10 @@
 ## Общее описание экспериментов и юпитер-тетрадок
 
 Основные ноутбуки:
-- [DL_Experiments_CNN_baseline3.ipynb](./DL_Experiments_CNN_baseline3.ipynb)
-- [DL_Experiments_densenet.ipynb](./DL_Experiments_densenet.ipynb)
-- [DL_Experiments_RESNET_collab_ver_3.ipynb](./DL_Experiments_RESNET_collab_ver_3.ipynb)
-- [DL_Experiments_MURA_DINOv2_Adapters_v3.ipynb](./DL_Experiments_MURA_DINOv2_Adapters_v3.ipynb)
+- [DL_Experiments_CNN_baseline3.ipynb](./notebooks/DL_Experiments_CNN_baseline3.ipynb)
+- [DL_Experiments_densenet.ipynb](./notebooks/DL_Experiments_densenet.ipynb)
+- [DL_Experiments_RESNET_collab_ver_3.ipynb](./notebooks/DL_Experiments_RESNET_collab_ver_3.ipynb)
+- [DL_Experiments_MURA_DINOv2_Adapters_v3.ipynb](./notebooks/DL_Experiments_MURA_DINOv2_Adapters_v3.ipynb)
 
 Основная метрика(как и прежде): **Cohen's kappa**. Дополнительно считались accuracy, ROC-AUC, PR-AUC и F1.
 
@@ -85,7 +93,7 @@ XR_WRIST        | 0.268  | 0.467  | 0.385  |
 
 ## DenseNet121
 
-Источник: [DL_Experiments_densenet.ipynb](./DL_Experiments_densenet.ipynb)
+Источник: [DL_Experiments_densenet.ipynb](./notebooks/DL_Experiments_densenet.ipynb)
 
 ### Общий pipeline
 
@@ -134,7 +142,7 @@ Targeted augmentation использовала `RandomHorizontalFlip`, `RandomRo
 ## ResNet50 / ResNet101
 
 Источник:  
-[DL_Experiments_RESNET_collab_ver_3.ipynb](./DL_Experiments_RESNET_collab_ver_3.ipynb)  
+[DL_Experiments_RESNET_collab_ver_3.ipynb](./notebooks/DL_Experiments_RESNET_collab_ver_3.ipynb)  
 
 <details>
 <summary>Было сделано несколько прогонов с ResNet, в выбранной версии итоговая метрика получилась лучше всего, </summary>
@@ -226,7 +234,7 @@ Kappa лучшей ResNet-модели `resnet_50_aug` по анатомиям:
 
 ## DINOv2-Large SimpleMURA
 
-Источник: [DL_Experiments_MURA_DINOv2_Adapters_v3.ipynb](./DL_Experiments_MURA_DINOv2_Adapters_v3.ipynb)
+Источник: [DL_Experiments_MURA_DINOv2_Adapters_v3.ipynb](./notebooks/DL_Experiments_MURA_DINOv2_Adapters_v3.ipynb)
 
 ### Общий pipeline
 

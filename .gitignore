@@ -219,3 +219,7 @@ models/**
 !models/model_hog_pca_poly_logreg_pics_all.pkl
 .vite/
 *.db
+mlflow-example/*
+infra/.env
+notes.md
+!docs/*
