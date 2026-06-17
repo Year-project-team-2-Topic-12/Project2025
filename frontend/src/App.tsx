@@ -475,8 +475,8 @@ function App() {
     <div className="container">
       <header className="app-hero">
         <div className="app-hero-copy">
-          <span className="app-eyebrow">MURA / MLflow</span>
-          <h1>MURA X-ray Analysis</h1>
+          <span className="app-eyebrow">Команда 2: MURA x-ray Analysis</span>
+          <h1>MURA X-ray Classification</h1>
         </div>
         <div className="app-hero-visual" aria-hidden="true">
           <div className="xray-panel xray-panel-primary" />

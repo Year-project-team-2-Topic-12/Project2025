@@ -31,9 +31,10 @@ def measure_inference_time_decorator(func):
         finally:
             duration_ms = (time.time() - start_time) * 1000
             result_value = self._prediction_log_value(result)
+            input_meta = self._prediction_log_meta(func.__name__, result)
             if self.request_logging_service is not None:
                 self.request_logging_service.add_inference_request(
-                    input_meta=f"Вызов {func.__name__}",
+                    input_meta=input_meta,
                     image_width=self.stat_image_width,
                     image_height=self.stat_image_height,
                     duration=duration_ms,
@@ -177,7 +178,44 @@ class InferenceService:
         if result is None:
             return None
         if isinstance(result, list):
-            return ", ".join(str(item.prediction) for item in result if hasattr(item, "prediction")) or "Нет предсказания"
-        if hasattr(result, "prediction"):
-            return str(getattr(result, "prediction"))
+            return "; ".join(self._format_prediction_log_item(item) for item in result) or "Нет предсказания"
+        prediction = self._get_log_field(result, "prediction")
+        if prediction is not None:
+            probability = self._get_log_field(result, "probability")
+            if probability is not None:
+                return f"{prediction} (p={float(probability):.4f})"
+            return str(prediction)
         return "Нет предсказания"
+
+    def _prediction_log_meta(self, func_name: str, result) -> str:
+        if isinstance(result, list):
+            studies_count = len(result)
+            images_count = sum(int(self._get_log_field(item, "n_images") or 0) for item in result)
+            return f"Вызов {func_name}: studies={studies_count}, images={images_count}"
+        return f"Вызов {func_name}"
+
+    def _format_prediction_log_item(self, item) -> str:
+        study_id = self._get_log_field(item, "study_id")
+        prediction = self._get_log_field(item, "prediction")
+        probability = self._get_log_field(item, "probability")
+        anatomy = self._get_log_field(item, "anatomy")
+        n_images = self._get_log_field(item, "n_images")
+
+        parts = []
+        if study_id is not None:
+            parts.append(f"{study_id}")
+        if prediction is not None:
+            parts.append(f"pred={prediction}")
+        if probability is not None:
+            parts.append(f"p={float(probability):.4f}")
+        if anatomy is not None:
+            parts.append(f"anatomy={anatomy}")
+        if n_images is not None:
+            parts.append(f"images={n_images}")
+
+        return " ".join(parts) if parts else "Нет предсказания"
+
+    def _get_log_field(self, item, field: str):
+        if isinstance(item, dict):
+            return item.get(field)
+        return getattr(item, field, None)
