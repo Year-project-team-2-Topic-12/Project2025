@@ -109,12 +109,15 @@ Frontend доступен по адресу `http://localhost:5173`.
 - `POST /forward`  
   Инференс по одному изображению.  
   Формат: `multipart/form-data`, поле `image` (файл).  
-  Заголовок `X-Debug: true` включает `debug` в ответе (обработанное изображение и HOG).
+  Заголовок `X-Anatomy` обязателен: одно из `XR_ELBOW`, `XR_FINGER`, `XR_FOREARM`, `XR_HAND`, `XR_HUMERUS`, `XR_SHOULDER`, `XR_WRIST`.
+  Заголовок `X-Debug: true` включает `debug` в ответе (обработанное изображение и image-level вероятности).
 
 - `POST /forwardMultiple`  
   Инференс по нескольким исследованиям.  
   Формат: `multipart/form-data`, повторяющиеся поля `images` (файлы).  
   Заголовок `X-Study-Ids` обязателен: список ID через запятую, количество ID должно совпадать с количеством файлов.  
+  Заголовок `X-Anatomies` обязателен: список anatomy через запятую в том же порядке, что и файлы. Для одного anatomy на все файлы можно передать `X-Anatomy`.
+  Вероятность исследования считается как среднее image-level `probability` по снимкам study.
   Опционально `X-Debug: true` (с той же семантикой).
 
 - `GET /history`  

@@ -326,6 +326,31 @@ body {
   color: var(--muted);
 }
 
+.field-label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.anatomy-select {
+  width: 100%;
+  min-height: 2.5rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.55rem 0.75rem;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.anatomy-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(255, 107, 44, 0.25);
+}
+
 .add-card {
   border: 2px dashed var(--accent);
   background: linear-gradient(135deg, rgba(255, 107, 44, 0.15), rgba(255, 211, 194, 0.3));
@@ -420,7 +445,8 @@ body {
   border: 1px solid rgba(27, 26, 23, 0.12);
 }
 
-.hog-output {
+.hog-output,
+.debug-output {
   margin-top: 0.5rem;
   max-height: 200px;
   overflow: auto;

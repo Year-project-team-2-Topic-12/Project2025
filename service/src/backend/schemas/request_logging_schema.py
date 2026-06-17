@@ -4,6 +4,7 @@ from backend.schemas.base_schema import BaseSchema
 
 
 class RequestLogEntry(BaseSchema):
+    id: int | None = None
     timestamp: datetime | None = None
     input_meta: str | None = None
     duration: float | None = None

@@ -1,4 +1,5 @@
-import { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
 import './App.css';
 import {
   forwardForwardPost,
@@ -17,7 +18,8 @@ import { HistoryTab } from './components/tabs/HistoryTab';
 import { UsersTab } from './components/tabs/UsersTab';
 import { StatsTab } from './components/tabs/StatsTab';
 import { PredictionsTab } from './components/tabs/PredictionsTab';
-import type { StudyInput } from './types';
+import { ANATOMY_OPTIONS } from './types';
+import type { Anatomy, StudyInput } from './types';
 import type {
   BodyForwardForwardPost,
   BodyForwardMultipleForwardMultiplePost,
@@ -35,6 +37,13 @@ type LoginResponse = {
   token_type?: string;
 };
 
+const unwrapData = <T,>(response: T | { data: T }): T => {
+  if (response && typeof response === 'object' && 'data' in response) {
+    return (response as { data: T }).data;
+  }
+  return response as T;
+};
+
 function App() {
   const [authToken, setAuthToken] = useState<string | null>(() => localStorage.getItem('authToken'));
   const [authUser, setAuthUser] = useState<string | null>(() => localStorage.getItem('authUser'));
@@ -49,8 +58,9 @@ function App() {
   const [createUserSuccess, setCreateUserSuccess] = useState<string | null>(null);
 
   const [singleFile, setSingleFile] = useState<File | null>(null);
+  const [singleAnatomy, setSingleAnatomy] = useState<Anatomy>('XR_SHOULDER');
   const [studies, setStudies] = useState<StudyInput[]>([
-    { id: crypto.randomUUID(), name: 'Study 1', files: [] },
+    { id: crypto.randomUUID(), name: 'Study 1', anatomy: 'XR_SHOULDER', files: [] },
   ]);
   const [debug, setDebug] = useState<boolean>(false);
 
@@ -104,14 +114,14 @@ function App() {
     setAuthError(null);
 
     try {
-      const response = (await loginAuthLoginPost({
+      const response = unwrapData<LoginResponse>(await loginAuthLoginPost({
         body: {
           username: loginUsername,
           password: loginPassword,
         },
         responseStyle: 'data',
         throwOnError: true,
-      })) as LoginResponse;
+      }));
 
       const token = response?.access_token;
       if (!token) {
@@ -152,7 +162,7 @@ function App() {
     setCreateUserSuccess(null);
 
     try {
-      const data = await registerAuthRegisterPost({
+      const data = unwrapData<{ username?: string }>(await registerAuthRegisterPost({
         body: {
           username: newUsername,
           password: newPassword,
@@ -162,7 +172,7 @@ function App() {
         },
         responseStyle: 'data',
         throwOnError: true,
-      });
+      }));
       const createdUsername =
         data && typeof data === 'object' && 'username' in data ? (data as { username?: string }).username : undefined;
       setCreateUserSuccess(`Пользователь ${createdUsername ?? newUsername} создан`);
@@ -186,11 +196,11 @@ function App() {
     setHistoryLoading(true);
     setHistoryError(null);
     try {
-      const data = await readHistoryHistoryGet({
+      const data = unwrapData<RequestLogEntry[]>(await readHistoryHistoryGet({
         responseStyle: 'data',
         throwOnError: true,
-      });
-      setHistoryItems((data as RequestLogEntry[]) ?? []);
+      }));
+      setHistoryItems(data ?? []);
     } catch (err) {
       if (err instanceof Error) {
         setHistoryError(err.message);
@@ -226,11 +236,11 @@ function App() {
     setStatsLoading(true);
     setStatsError(null);
     try {
-      const data = await getStatsStatsGet({
+      const data = unwrapData<StatsResponse>(await getStatsStatsGet({
         responseStyle: 'data',
         throwOnError: true,
-      });
-      setStatsData(data as StatsResponse);
+      }));
+      setStatsData(data);
     } catch (err) {
       if (err instanceof Error) {
         setStatsError(err.message);
@@ -246,11 +256,11 @@ function App() {
     setUsersLoading(true);
     setUsersError(null);
     try {
-      const data = await listUsersAuthUsersGet({
+      const data = unwrapData<UserResponse[]>(await listUsersAuthUsersGet({
         responseStyle: 'data',
         throwOnError: true,
-      });
-      setUsers((data as UserResponse[]) ?? []);
+      }));
+      setUsers(data ?? []);
     } catch (err) {
       if (err instanceof Error) {
         setUsersError(err.message);
@@ -309,10 +319,16 @@ function App() {
     setStudies((prev) => prev.map((study, i) => (i === index ? { ...study, name } : study)));
   };
 
+  const updateStudyAnatomy = (index: number, anatomy: Anatomy) => {
+    setStudies((prev) => prev.map((study, i) => (i === index ? { ...study, anatomy } : study)));
+    setPredictionMultiple(null);
+    setError(null);
+  };
+
   const addStudy = () => {
     setStudies((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), name: `Study ${prev.length + 1}`, files: [] },
+      { id: crypto.randomUUID(), name: `Study ${prev.length + 1}`, anatomy: 'XR_SHOULDER', files: [] },
     ]);
   };
 
@@ -326,6 +342,12 @@ function App() {
     setSingleFile(file);
     setPredictionSingle(null);
     setPredictionMultiple(null);
+    setError(null);
+  };
+
+  const handleSingleAnatomyChange = (anatomy: Anatomy) => {
+    setSingleAnatomy(anatomy);
+    setPredictionSingle(null);
     setError(null);
   };
 
@@ -345,15 +367,16 @@ function App() {
 
       const body: BodyForwardForwardPost = { image: singleFile as File };
       const headers = {
+        'X-Anatomy': singleAnatomy,
         'X-Debug': debug,
         ...authHeaders,
       } as ForwardForwardPostData['headers'] & { Authorization?: string };
-      const data = await forwardForwardPost({
+      const data = unwrapData<ForwardImageResponse>(await forwardForwardPost({
         body,
         headers,
         responseStyle: 'data',
         throwOnError: true,
-      });
+      }));
       setPredictionSingle(data);
       setPredictionMultiple(null);
 
@@ -362,7 +385,7 @@ function App() {
         setError(err.message);
       } else {
         console.log(err);
-        setError(`ошибка: ${err.message || err.detail || String(err)}`);
+        setError(`ошибка: ${String(err)}`);
       }
     } finally {
       setLoading(false);
@@ -385,25 +408,28 @@ function App() {
 
       const files: File[] = [];
       const studyIds: string[] = [];
+      const anatomies: Anatomy[] = [];
       studies.forEach((study) => {
         study.files.forEach((file) => {
           files.push(file);
           studyIds.push(study.id);
+          anatomies.push(study.anatomy);
         });
       });
 
       const body: BodyForwardMultipleForwardMultiplePost = { images: files };
       const headers = {
         'X-Study-Ids': studyIds.join(','),
+        'X-Anatomies': anatomies.join(','),
         'X-Debug': debug,
         ...authHeaders,
       } as ForwardMultipleForwardMultiplePostData['headers'] & { Authorization?: string };
-      const data = await forwardMultipleForwardMultiplePost({
+      const data = unwrapData<PredictionResponse[]>(await forwardMultipleForwardMultiplePost({
         body,
         headers,
         responseStyle: 'data',
         throwOnError: true,
-      });
+      }));
       setPredictionMultiple(data);
       setPredictionSingle(null);
     } catch (err) {
@@ -411,7 +437,7 @@ function App() {
         setError(err.message);
       } else {
         console.log(err);
-        setError(`ошибка: ${err.message || err.detail || String(err)}`);
+        setError(`ошибка: ${String(err)}`);
       }
     } finally {
       setLoading(false);
@@ -503,14 +529,18 @@ function App() {
           {activeTab === 'predictions' && (
             <PredictionsTab
               singleFile={singleFile}
+              singleAnatomy={singleAnatomy}
+              anatomyOptions={ANATOMY_OPTIONS}
               loading={loading}
               debug={debug}
               onSingleSubmit={handleSingleSubmit}
               onSingleFileChange={handleSingleFileChange}
+              onSingleAnatomyChange={handleSingleAnatomyChange}
               onDebugChange={setDebug}
               studies={studies}
               onStudySubmit={handleStudySubmit}
               onStudyNameChange={updateStudyName}
+              onStudyAnatomyChange={updateStudyAnatomy}
               onStudyFilesChange={updateStudyFiles}
               onAddStudy={addStudy}
               onRemoveStudy={removeStudy}

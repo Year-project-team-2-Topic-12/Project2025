@@ -55,21 +55,59 @@ export type BodyLoginAuthLoginPost = {
 };
 
 /**
+ * DebugImagePrediction
+ */
+export type DebugImagePrediction = {
+    /**
+     * Filename
+     */
+    filename?: string | null;
+    /**
+     * Anatomy
+     */
+    anatomy: string;
+    /**
+     * Probability
+     */
+    probability: number;
+    /**
+     * Prediction
+     */
+    prediction: number;
+    /**
+     * Confidence
+     */
+    confidence: number;
+    /**
+     * Threshold
+     */
+    threshold: number;
+    /**
+     * Processed Image
+     */
+    processed_image?: string | null;
+};
+
+/**
  * DebugPayload
  */
 export type DebugPayload = {
     /**
      * Hog
      */
-    hog: Array<number>;
+    hog?: Array<number> | null;
     /**
      * Processed Image
      */
-    processed_image: string;
+    processed_image?: string | null;
     /**
      * Hog Image
      */
     hog_image?: string | null;
+    /**
+     * Image Predictions
+     */
+    image_predictions?: Array<DebugImagePrediction> | null;
 };
 
 /**
@@ -101,13 +139,25 @@ export type ForwardImageResponse = {
      */
     filename?: string | null;
     /**
+     * Anatomy
+     */
+    anatomy?: string | null;
+    /**
      * Prediction
      */
     prediction?: string | number | number | null;
     /**
+     * Probability
+     */
+    probability?: number | null;
+    /**
      * Confidence
      */
     confidence?: number | null;
+    /**
+     * Threshold
+     */
+    threshold?: number | null;
     /**
      * Image Base64
      */
@@ -152,17 +202,33 @@ export type PredictionResponse = {
      */
     study_id: string;
     /**
+     * Anatomy
+     */
+    anatomy?: string | null;
+    /**
      * Filenames
      */
     filenames: Array<string>;
+    /**
+     * N Images
+     */
+    n_images?: number | null;
     /**
      * Prediction
      */
     prediction?: string | number | number | null;
     /**
+     * Probability
+     */
+    probability?: number | null;
+    /**
      * Confidence
      */
     confidence?: number | null;
+    /**
+     * Threshold
+     */
+    threshold?: number | null;
     debug?: DebugPayload | null;
 };
 
@@ -220,6 +286,10 @@ export type RegisterResponse = {
  * RequestLogEntry
  */
 export type RequestLogEntry = {
+    /**
+     * Id
+     */
+    id?: number | null;
     /**
      * Timestamp
      */
@@ -462,6 +532,10 @@ export type ForwardForwardPostData = {
     body: BodyForwardForwardPost;
     headers?: {
         /**
+         * X-Anatomy
+         */
+        'X-Anatomy'?: string | null;
+        /**
          * X-Debug
          */
         'X-Debug'?: boolean;
@@ -496,6 +570,14 @@ export type ForwardMultipleForwardMultiplePostData = {
          * X-Study-Ids
          */
         'X-Study-Ids': string;
+        /**
+         * X-Anatomies
+         */
+        'X-Anatomies'?: string | null;
+        /**
+         * X-Anatomy
+         */
+        'X-Anatomy'?: string | null;
         /**
          * X-Debug
          */
