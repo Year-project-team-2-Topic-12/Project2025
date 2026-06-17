@@ -75,7 +75,7 @@ export function PredictionsTab({
         onDebugChange={onDebugChange}
       />
 
-      {error && <div style={{ color: 'red', marginTop: '10px' }}>{error}</div>}
+      {error && <div className="auth-error prediction-error">{error}</div>}
 
       {predictionSingle && (
         <div className="result-block">

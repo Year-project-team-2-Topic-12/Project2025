@@ -44,6 +44,33 @@ const unwrapData = <T,>(response: T | { data: T }): T => {
   return response as T;
 };
 
+const createStudyId = () => {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+
+  const bytes = new Uint8Array(16);
+  if (typeof globalThis.crypto?.getRandomValues === 'function') {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0'));
+  return [
+    hex.slice(0, 4).join(''),
+    hex.slice(4, 6).join(''),
+    hex.slice(6, 8).join(''),
+    hex.slice(8, 10).join(''),
+    hex.slice(10, 16).join(''),
+  ].join('-');
+};
+
 function App() {
   const [authToken, setAuthToken] = useState<string | null>(() => localStorage.getItem('authToken'));
   const [authUser, setAuthUser] = useState<string | null>(() => localStorage.getItem('authUser'));
@@ -59,8 +86,8 @@ function App() {
 
   const [singleFile, setSingleFile] = useState<File | null>(null);
   const [singleAnatomy, setSingleAnatomy] = useState<Anatomy>('XR_SHOULDER');
-  const [studies, setStudies] = useState<StudyInput[]>([
-    { id: crypto.randomUUID(), name: 'Study 1', anatomy: 'XR_SHOULDER', files: [] },
+  const [studies, setStudies] = useState<StudyInput[]>(() => [
+    { id: createStudyId(), name: 'Study 1', anatomy: 'XR_SHOULDER', files: [] },
   ]);
   const [debug, setDebug] = useState<boolean>(false);
 
@@ -328,7 +355,7 @@ function App() {
   const addStudy = () => {
     setStudies((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), name: `Study ${prev.length + 1}`, anatomy: 'XR_SHOULDER', files: [] },
+      { id: createStudyId(), name: `Study ${prev.length + 1}`, anatomy: 'XR_SHOULDER', files: [] },
     ]);
   };
 
@@ -446,7 +473,16 @@ function App() {
 
   return (
     <div className="container">
-      <h1>MURA ML Upload</h1>
+      <header className="app-hero">
+        <div className="app-hero-copy">
+          <span className="app-eyebrow">MURA / MLflow</span>
+          <h1>MURA X-ray Analysis</h1>
+        </div>
+        <div className="app-hero-visual" aria-hidden="true">
+          <div className="xray-panel xray-panel-primary" />
+          <div className="xray-panel xray-panel-secondary" />
+        </div>
+      </header>
 
       <AuthForm
         authToken={authToken}

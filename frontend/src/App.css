@@ -1,59 +1,197 @@
 :root {
-  --bg: #f7f0e8;
-  --surface: #fff7ee;
-  --surface-strong: #1c1b19;
-  --accent: #ff6b2c;
-  --accent-soft: #ffd3c2;
-  --ink: #1b1a17;
-  --muted: #5f5a53;
-  --card: #fff2e7;
-  --border: #e2cdbd;
-  --shadow: 0 18px 40px rgba(22, 18, 14, 0.18);
+  --bg: #f4f4f2;
+  --bg-strong: #e8e8e4;
+  --surface: #ffffff;
+  --surface-muted: #f0f1ef;
+  --surface-strong: #2f302e;
+  --accent: #5d789f;
+  --accent-strong: #435d80;
+  --accent-soft: #d8e0ea;
+  --ink: #34332f;
+  --muted: #74726d;
+  --card: #fafaf8;
+  --border: #d8d8d2;
+  --border-strong: #b9bab4;
+  --danger: #9b3128;
+  --success: #276043;
+  --shadow: 0 18px 42px rgba(35, 36, 34, 0.11);
+  --shadow-soft: 0 10px 24px rgba(35, 36, 34, 0.08);
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  font-family: "Space Grotesk", "Avenir Next", "Helvetica Neue", "Noto Sans", sans-serif;
-  background: radial-gradient(circle at top, #fff3e2 0%, #f3e5d5 40%, #efe0d1 100%);
+  font-family: Inter, "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(232, 232, 228, 0.86)),
+    radial-gradient(circle at 82% 12%, rgba(93, 120, 159, 0.14), transparent 34%),
+    var(--bg);
   color: var(--ink);
 }
 
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  border-radius: 8px;
+}
+
 .container {
-  max-width: 1100px;
+  width: min(1160px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 3rem 1.5rem 4rem;
+  padding: 2rem 0 4rem;
+}
+
+.app-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 420px);
+  align-items: stretch;
+  min-height: 220px;
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.app-hero-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: clamp(1.5rem, 4vw, 3rem);
+}
+
+.app-eyebrow {
+  width: fit-content;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 .container h1 {
-  font-size: clamp(2rem, 3vw, 3rem);
-  letter-spacing: -0.02em;
-  margin-bottom: 1.5rem;
+  max-width: 12ch;
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.4rem, 6vw, 4.7rem);
+  font-weight: 500;
+  line-height: 0.98;
+  color: var(--ink);
+}
+
+.app-hero-visual {
+  position: relative;
+  min-height: 220px;
+  background:
+    linear-gradient(90deg, rgba(47, 48, 46, 0.52), rgba(47, 48, 46, 0.08)),
+    url("./assets/mura-xray-collage.jpg") center / cover;
+  isolation: isolate;
+}
+
+.app-hero-visual::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, rgba(244, 244, 242, 0.12), rgba(255, 255, 255, 0.74));
+  mix-blend-mode: screen;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.xray-panel {
+  position: absolute;
+  z-index: 1;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
+  background-position: center;
+  background-size: cover;
+  filter: grayscale(1);
+}
+
+.xray-panel-primary {
+  right: 2.25rem;
+  top: 1.25rem;
+  width: 42%;
+  min-width: 128px;
+  aspect-ratio: 0.78;
+  background-image: url("./assets/mura-hero-xray.jpg");
+}
+
+.xray-panel-secondary {
+  right: 11.5rem;
+  bottom: 1.35rem;
+  width: 44%;
+  min-width: 150px;
+  aspect-ratio: 1.34;
+  background-image: url("./assets/mura-finger-xray.jpg");
+  opacity: 0.84;
 }
 
 .upload-form {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 1.5rem;
-  box-shadow: var(--shadow);
-  margin-bottom: 2rem;
+  gap: 1.1rem;
+  padding: 1.1rem 0 1.4rem;
+  margin-bottom: 1.6rem;
+  border-top: 1px solid var(--border);
 }
 
-.upload-form h2 {
+.upload-form h2,
+.panel-header h2,
+.result-block h2 {
   margin: 0;
-  font-size: 1.4rem;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+  font-weight: 500;
+  color: var(--ink);
 }
 
 .auth-card {
-  background: var(--card);
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(110deg, rgba(250, 250, 248, 0.96), rgba(250, 250, 248, 0.82)),
+    var(--card);
   border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 1.5rem;
-  box-shadow: var(--shadow);
-  margin-bottom: 2rem;
+  border-radius: 8px;
+  padding: 1.25rem;
+  box-shadow: var(--shadow-soft);
+  margin-bottom: 1.25rem;
+}
+
+.auth-card::after {
+  content: "";
+  position: absolute;
+  right: -2rem;
+  top: -4rem;
+  width: min(280px, 42vw);
+  height: 210px;
+  background: url("./assets/mura-finger-xray.jpg") center / cover;
+  filter: grayscale(1);
+  opacity: 0.12;
+  transform: rotate(-8deg);
+  pointer-events: none;
+}
+
+.auth-header,
+.auth-form,
+.auth-status,
+.auth-error,
+.auth-success {
+  position: relative;
+  z-index: 1;
 }
 
 .auth-header {
@@ -66,7 +204,7 @@ body {
 
 .auth-header h2 {
   margin: 0;
-  font-size: 1.4rem;
+  font-size: 1.2rem;
 }
 
 .auth-form {
@@ -78,39 +216,58 @@ body {
 .auth-form label {
   display: grid;
   gap: 0.35rem;
-  font-weight: 600;
+  font-weight: 650;
   color: var(--ink);
 }
 
-.auth-form input {
+.auth-form input,
+.study-name,
+.anatomy-select {
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 0.65rem 0.85rem;
-  font-size: 1rem;
+  border-radius: 8px;
   background: var(--surface);
   color: var(--ink);
 }
 
-.auth-form input:focus {
+.auth-form input {
+  padding: 0.65rem 0.85rem;
+  font-size: 1rem;
+}
+
+.auth-form input:focus,
+.study-name:focus,
+.anatomy-select:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(255, 107, 44, 0.25);
+  box-shadow: 0 0 0 3px rgba(93, 120, 159, 0.2);
 }
 
-.auth-form button {
+.auth-form button,
+.form-actions button {
   justify-self: start;
+  border: 1px solid var(--surface-strong);
   background: var(--surface-strong);
-  color: #fff3e2;
-  border: none;
-  padding: 0.7rem 1.6rem;
-  border-radius: 999px;
-  font-weight: 700;
+  color: #f7f7f4;
+  padding: 0.72rem 1.35rem;
+  font-weight: 750;
   cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
 }
 
-.auth-form button:disabled {
-  opacity: 0.6;
+.auth-form button:disabled,
+.form-actions button:disabled,
+.tab-button:disabled,
+.ghost-button:disabled {
+  opacity: 0.58;
   cursor: not-allowed;
+  box-shadow: none;
+}
+
+.auth-form button:not(:disabled):hover,
+.form-actions button:not(:disabled):hover {
+  background: #1f201f;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(35, 36, 34, 0.22);
 }
 
 .auth-status {
@@ -120,20 +277,24 @@ body {
 
 .auth-error {
   margin-top: 0.75rem;
-  color: #a12b1f;
-  font-weight: 600;
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.prediction-error {
+  margin: 1rem 0 0;
 }
 
 .auth-success {
   margin-top: 0.75rem;
-  color: #1f6b3a;
-  font-weight: 600;
+  color: var(--success);
+  font-weight: 700;
 }
 
 .auth-hint {
   background: var(--surface);
-  border: 1px dashed var(--border);
-  border-radius: 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
   padding: 1rem 1.25rem;
   color: var(--muted);
 }
@@ -141,23 +302,27 @@ body {
 .tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  margin: 1rem 0 2rem;
+  gap: 0.65rem;
+  margin: 1rem 0 1.75rem;
 }
 
 .tab-button {
   border: 1px solid var(--border);
-  background: var(--surface);
+  background: rgba(255, 255, 255, 0.72);
   color: var(--ink);
-  padding: 0.5rem 1.2rem;
-  border-radius: 999px;
-  font-weight: 600;
+  padding: 0.52rem 1rem;
+  font-weight: 700;
   cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+}
+
+.tab-button:hover {
+  border-color: var(--accent);
 }
 
 .tab-button.active {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--surface-strong);
+  border-color: var(--surface-strong);
   color: #fff;
 }
 
@@ -174,10 +339,6 @@ body {
   margin-bottom: 1rem;
 }
 
-.panel-header h2 {
-  margin: 0;
-}
-
 .panel-actions {
   display: flex;
   gap: 0.75rem;
@@ -191,6 +352,9 @@ body {
 
 .table-scroll {
   overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
 }
 
 .data-table {
@@ -202,34 +366,55 @@ body {
 .data-table th,
 .data-table td {
   text-align: left;
-  padding: 0.6rem 0.75rem;
+  padding: 0.65rem 0.8rem;
   border-bottom: 1px solid var(--border);
   font-size: 0.95rem;
 }
 
-.stats-grid {
+.data-table th {
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-weight: 750;
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.stats-grid,
+.results-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1rem;
 }
 
-.stats-card {
-  background: var(--surface);
+.stats-card,
+.single-card,
+.study-card,
+.add-card,
+.result-card {
+  background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 1rem 1.25rem;
-  box-shadow: var(--shadow);
+  border-radius: 8px;
+  padding: 1.1rem;
+  box-shadow: var(--shadow-soft);
 }
 
 .stats-card h3 {
-  margin-top: 0;
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+}
+
+.stats-card p {
+  margin: 0.45rem 0;
+  color: var(--muted);
 }
 
 .mode-toggle {
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
-  font-weight: 600;
+  font-weight: 650;
   color: var(--ink);
 }
 
@@ -239,32 +424,41 @@ body {
   align-items: center;
   background: var(--surface);
   padding: 0.5rem 1rem;
-  border-radius: 999px;
+  border-radius: 8px;
   border: 1px solid var(--border);
 }
 
 .single-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 1.5rem;
-  box-shadow: var(--shadow);
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(190px, 260px) minmax(180px, 1fr);
+  gap: 1rem;
+  align-items: end;
+  overflow: hidden;
+}
+
+.single-card::after {
+  content: "";
+  position: absolute;
+  right: -2rem;
+  bottom: -4rem;
+  width: min(320px, 44vw);
+  height: 220px;
+  background: url("./assets/mura-hero-xray.jpg") center / cover;
+  filter: grayscale(1);
+  opacity: 0.08;
+  pointer-events: none;
+}
+
+.single-card > * {
+  position: relative;
+  z-index: 1;
 }
 
 .study-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 1rem;
-}
-
-.study-card,
-.add-card,
-.result-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 1.25rem;
-  box-shadow: var(--shadow);
 }
 
 .study-card {
@@ -285,31 +479,25 @@ body {
   flex: 1;
   min-width: 0;
   width: 100%;
-  border: none;
-  background: transparent;
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--ink);
-  border-bottom: 1px solid rgba(27, 26, 23, 0.2);
-  padding: 0.25rem 0;
-}
-
-.study-name:focus {
-  outline: none;
-  border-bottom-color: var(--accent);
+  padding: 0.55rem 0.7rem;
+  font-size: 1rem;
+  font-weight: 700;
 }
 
 .file-input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: fit-content;
+  min-height: 2.6rem;
   background: var(--surface-strong);
-  color: #fff3e2;
-  padding: 0.75rem 1rem;
-  border-radius: 999px;
-  font-weight: 600;
+  color: #f7f7f4;
+  border: 1px solid var(--surface-strong);
+  padding: 0.68rem 1rem;
+  border-radius: 8px;
+  font-weight: 750;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
 }
 
 .file-input input {
@@ -317,47 +505,49 @@ body {
 }
 
 .file-input:hover {
+  background: #1f201f;
   transform: translateY(-1px);
-  box-shadow: 0 10px 20px rgba(28, 27, 25, 0.2);
+  box-shadow: 0 10px 22px rgba(35, 36, 34, 0.2);
 }
 
 .file-hint {
-  font-size: 0.9rem;
+  min-width: 0;
+  font-size: 0.92rem;
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .field-label {
   display: grid;
   gap: 0.35rem;
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--ink);
 }
 
 .anatomy-select {
   width: 100%;
-  min-height: 2.5rem;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 0.55rem 0.75rem;
-  background: var(--surface);
-  color: var(--ink);
-  font: inherit;
-}
-
-.anatomy-select:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(255, 107, 44, 0.25);
+  min-height: 2.55rem;
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
 }
 
 .add-card {
-  border: 2px dashed var(--accent);
-  background: linear-gradient(135deg, rgba(255, 107, 44, 0.15), rgba(255, 211, 194, 0.3));
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--ink);
+  min-height: 164px;
+  border: 1px dashed var(--border-strong);
+  background:
+    linear-gradient(135deg, rgba(216, 224, 234, 0.42), rgba(255, 255, 255, 0.72)),
+    var(--surface);
+  font-size: 1rem;
+  font-weight: 750;
+  color: var(--accent-strong);
   cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+}
+
+.add-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
 }
 
 .form-actions {
@@ -367,41 +557,21 @@ body {
   align-items: center;
 }
 
-.form-actions button {
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  padding: 0.85rem 2rem;
-  border-radius: 999px;
-  font-size: 1rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.form-actions button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  box-shadow: none;
-}
-
-.form-actions button:not(:disabled):hover {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 24px rgba(255, 107, 44, 0.35);
-}
-
 .ghost-button {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.62);
   border: 1px solid var(--border);
-  padding: 0.25rem 0.75rem;
-  border-radius: 999px;
+  padding: 0.45rem 0.8rem;
+  border-radius: 8px;
   color: var(--muted);
   cursor: pointer;
+  font-weight: 700;
+  transition: border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease;
 }
 
 .ghost-button:hover {
   color: var(--ink);
   border-color: var(--accent);
+  background: var(--surface);
 }
 
 .debug-toggle {
@@ -412,18 +582,16 @@ body {
   color: var(--muted);
 }
 
+.debug-toggle input {
+  accent-color: var(--accent);
+}
+
 .result-block {
-  margin-top: 2.5rem;
+  margin-top: 2rem;
 }
 
 .result-block h2 {
   margin-bottom: 1rem;
-}
-
-.results-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.25rem;
 }
 
 .result-card {
@@ -436,13 +604,18 @@ body {
   color: var(--ink);
 }
 
+.result-item:first-child {
+  margin-top: 0;
+}
+
 .result-image {
   display: block;
   margin-top: 0.6rem;
   max-width: 100%;
   height: auto;
-  border-radius: 12px;
-  border: 1px solid rgba(27, 26, 23, 0.12);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  filter: grayscale(0.18);
 }
 
 .hog-output,
@@ -450,9 +623,95 @@ body {
   margin-top: 0.5rem;
   max-height: 200px;
   overflow: auto;
-  background: #fff;
+  background: #f7f7f4;
+  color: #2f302e;
   padding: 0.75rem;
-  border-radius: 12px;
+  border-radius: 8px;
   font-size: 0.75rem;
-  border: 1px solid rgba(27, 26, 23, 0.1);
+  border: 1px solid var(--border);
+}
+
+@media (max-width: 760px) {
+  .container {
+    width: min(100% - 24px, 1160px);
+    padding-top: 1rem;
+  }
+
+  .app-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .app-hero-copy {
+    padding: 1.45rem 1.5rem 1.1rem;
+  }
+
+  .container h1 {
+    max-width: 100%;
+    font-size: clamp(2.25rem, 8vw, 3rem);
+    line-height: 1.04;
+  }
+
+  .app-hero-visual {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.75rem;
+    min-height: 0;
+    padding: 0.75rem;
+    background:
+      linear-gradient(90deg, rgba(47, 48, 46, 0.44), rgba(47, 48, 46, 0.1)),
+      url("./assets/mura-xray-collage.jpg") center / cover;
+  }
+
+  .xray-panel {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    min-width: 0;
+    height: clamp(118px, 25vw, 150px);
+    aspect-ratio: auto;
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.22);
+  }
+
+  .xray-panel-primary {
+    right: auto;
+    top: auto;
+    width: 100%;
+  }
+
+  .xray-panel-secondary {
+    right: auto;
+    left: auto;
+    bottom: auto;
+    width: 100%;
+  }
+
+  .single-card {
+    grid-template-columns: 1fr;
+  }
+
+  .tabs {
+    gap: 0.5rem;
+  }
+
+  .tab-button {
+    flex: 1 1 130px;
+  }
+}
+
+@media (max-width: 460px) {
+  .app-hero-copy {
+    padding: 1.2rem 1.15rem 0.95rem;
+  }
+
+  .container h1 {
+    font-size: clamp(2rem, 11vw, 2.55rem);
+  }
+
+  .app-hero-visual {
+    grid-template-columns: 1fr;
+  }
+
+  .xray-panel {
+    height: 126px;
+  }
 }
