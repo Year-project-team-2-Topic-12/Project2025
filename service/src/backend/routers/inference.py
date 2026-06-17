@@ -72,7 +72,7 @@ def run_prediction(executable: Callable):
         raise HTTPException(status_code=403, detail="модель не смогла обработать данные")
 
 @router.post("/forward", response_model=ForwardImageResponse)
-async def forward(
+def forward(
     request: Request,
     image: UploadFile = File(..., alias="image"), 
     anatomy: str | None = Header(None, alias="X-Anatomy"),
