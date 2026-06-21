@@ -1,12 +1,14 @@
 import type { FormEvent } from 'react';
-import type { StudyInput } from '../types';
+import type { Anatomy, StudyInput } from '../types';
 
 type StudyUploadFormProps = {
   studies: StudyInput[];
+  anatomyOptions: readonly Anatomy[];
   loading: boolean;
   debug: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onStudyNameChange: (index: number, name: string) => void;
+  onStudyAnatomyChange: (index: number, anatomy: Anatomy) => void;
   onStudyFilesChange: (index: number, files: File[]) => void;
   onAddStudy: () => void;
   onRemoveStudy: (index: number) => void;
@@ -15,10 +17,12 @@ type StudyUploadFormProps = {
 
 export function StudyUploadForm({
   studies,
+  anatomyOptions,
   loading,
   debug,
   onSubmit,
   onStudyNameChange,
+  onStudyAnatomyChange,
   onStudyFilesChange,
   onAddStudy,
   onRemoveStudy,
@@ -50,6 +54,20 @@ export function StudyUploadForm({
                 </button>
               )}
             </div>
+            <label className="field-label">
+              Anatomy
+              <select
+                className="anatomy-select"
+                value={study.anatomy}
+                onChange={(event) => onStudyAnatomyChange(index, event.target.value as Anatomy)}
+              >
+                {anatomyOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="file-input">
               <input
                 type="file"

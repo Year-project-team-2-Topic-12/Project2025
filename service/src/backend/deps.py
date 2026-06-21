@@ -12,14 +12,9 @@ from backend.services.stats_service import StatsService
 
 
 @lru_cache(maxsize=1)
-def get_hog_predictor() -> 'HogPredictor':
-    from ml.hog_predictor import HogPredictor
-    return HogPredictor('hog_pca_poly_logreg_pics')
-
-@lru_cache(maxsize=1)
-def get_hog_predictor_multiple() -> 'HogPredictor':
-    from ml.hog_predictor import HogPredictor
-    return HogPredictor()
+def get_dino_predictor() -> 'DinoMlflowPredictor':
+    from ml.dino_predictor import DinoMlflowPredictor
+    return DinoMlflowPredictor()
 
 def get_user_repository(session: Session = Depends(get_session)) -> UserRepository:
     return UserRepository(session)
@@ -46,9 +41,8 @@ def get_stats_service(
     return StatsService(repo)
 
 def get_inference_service(
-        hog_predictor_multiple = Depends(get_hog_predictor_multiple),
-        hog_predictor_single = Depends(get_hog_predictor),
+        dino_predictor = Depends(get_dino_predictor),
         request_logging_service = Depends(get_request_logging_service)
     ) -> 'InferenceService':
     from .services.inference_service import InferenceService
-    return InferenceService(predictor_multiple=hog_predictor_multiple, predictor_single=hog_predictor_single, request_logging_service=request_logging_service)
+    return InferenceService(predictor=dino_predictor, request_logging_service=request_logging_service)

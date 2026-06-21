@@ -1,19 +1,23 @@
 import type { FormEvent } from 'react';
 import type { ForwardImageResponse, PredictionResponse } from '../../client';
-import type { StudyInput } from '../../types';
+import type { Anatomy, StudyInput } from '../../types';
 import { SingleUploadForm } from '../SingleUploadForm';
 import { StudyUploadForm } from '../StudyUploadForm';
 
 type PredictionsTabProps = {
   singleFile: File | null;
+  singleAnatomy: Anatomy;
+  anatomyOptions: readonly Anatomy[];
   loading: boolean;
   debug: boolean;
   onSingleSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onSingleFileChange: (file: File | null) => void;
+  onSingleAnatomyChange: (anatomy: Anatomy) => void;
   onDebugChange: (checked: boolean) => void;
   studies: StudyInput[];
   onStudySubmit: (event: FormEvent<HTMLFormElement>) => void;
   onStudyNameChange: (index: number, name: string) => void;
+  onStudyAnatomyChange: (index: number, anatomy: Anatomy) => void;
   onStudyFilesChange: (index: number, files: File[]) => void;
   onAddStudy: () => void;
   onRemoveStudy: (index: number) => void;
@@ -24,14 +28,18 @@ type PredictionsTabProps = {
 
 export function PredictionsTab({
   singleFile,
+  singleAnatomy,
+  anatomyOptions,
   loading,
   debug,
   onSingleSubmit,
   onSingleFileChange,
+  onSingleAnatomyChange,
   onDebugChange,
   studies,
   onStudySubmit,
   onStudyNameChange,
+  onStudyAnatomyChange,
   onStudyFilesChange,
   onAddStudy,
   onRemoveStudy,
@@ -43,26 +51,31 @@ export function PredictionsTab({
     <>
       <SingleUploadForm
         singleFile={singleFile}
+        anatomy={singleAnatomy}
+        anatomyOptions={anatomyOptions}
         loading={loading}
         debug={debug}
         onSubmit={onSingleSubmit}
         onFileChange={onSingleFileChange}
+        onAnatomyChange={onSingleAnatomyChange}
         onDebugChange={onDebugChange}
       />
 
       <StudyUploadForm
         studies={studies}
+        anatomyOptions={anatomyOptions}
         loading={loading}
         debug={debug}
         onSubmit={onStudySubmit}
         onStudyNameChange={onStudyNameChange}
+        onStudyAnatomyChange={onStudyAnatomyChange}
         onStudyFilesChange={onStudyFilesChange}
         onAddStudy={onAddStudy}
         onRemoveStudy={onRemoveStudy}
         onDebugChange={onDebugChange}
       />
 
-      {error && <div style={{ color: 'red', marginTop: '10px' }}>{error}</div>}
+      {error && <div className="auth-error prediction-error">{error}</div>}
 
       {predictionSingle && (
         <div className="result-block">
@@ -76,8 +89,19 @@ export function PredictionsTab({
                 <strong>Prediction:</strong> {String(predictionSingle.prediction ?? '—')}
               </div>
               <div className="result-item">
+                <strong>Anatomy:</strong> {predictionSingle.anatomy ?? '—'}
+              </div>
+              <div className="result-item">
+                <strong>Probability:</strong>{' '}
+                {predictionSingle.probability != null ? predictionSingle.probability.toFixed(4) : '—'}
+              </div>
+              <div className="result-item">
                 <strong>Confidence:</strong>{' '}
                 {predictionSingle.confidence != null ? predictionSingle.confidence.toFixed(4) : '—'}
+              </div>
+              <div className="result-item">
+                <strong>Threshold:</strong>{' '}
+                {predictionSingle.threshold != null ? predictionSingle.threshold.toFixed(3) : '—'}
               </div>
               <div className="result-item">
                 <strong>Image:</strong>
@@ -89,28 +113,21 @@ export function PredictionsTab({
               </div>
               {predictionSingle.debug && (
                 <>
-                  <div className="result-item">
-                    <strong>Processed image:</strong>
-                    <img
-                      className="result-image"
-                      src={predictionSingle.debug.processed_image}
-                      alt="Processed"
-                    />
-                  </div>
-                  {predictionSingle.debug.hog_image && (
+                  {predictionSingle.debug.processed_image && (
                     <div className="result-item">
-                      <strong>HOG image:</strong>
+                      <strong>Processed image:</strong>
                       <img
                         className="result-image"
-                        src={predictionSingle.debug.hog_image}
-                        alt="HOG"
+                        src={predictionSingle.debug.processed_image}
+                        alt="Processed"
                       />
                     </div>
                   )}
-                  <div className="result-item">
-                    <strong>HOG vector:</strong>
-                    <pre className="hog-output">{JSON.stringify(predictionSingle.debug.hog, null, 2)}</pre>
-                  </div>
+                  {predictionSingle.debug.image_predictions && (
+                    <pre className="debug-output">
+                      {JSON.stringify(predictionSingle.debug.image_predictions, null, 2)}
+                    </pre>
+                  )}
                 </>
               )}
             </div>
@@ -135,33 +152,40 @@ export function PredictionsTab({
                   <strong>Prediction:</strong> {String(item.prediction ?? '—')}
                 </div>
                 <div className="result-item">
+                  <strong>Anatomy:</strong> {item.anatomy ?? '—'}
+                </div>
+                <div className="result-item">
+                  <strong>Images:</strong> {item.n_images ?? item.filenames.length}
+                </div>
+                <div className="result-item">
+                  <strong>Probability:</strong>{' '}
+                  {item.probability != null ? item.probability.toFixed(4) : '—'}
+                </div>
+                <div className="result-item">
                   <strong>Confidence:</strong>{' '}
                   {item.confidence != null ? item.confidence.toFixed(4) : '—'}
                 </div>
+                <div className="result-item">
+                  <strong>Threshold:</strong>{' '}
+                  {item.threshold != null ? item.threshold.toFixed(3) : '—'}
+                </div>
                 {item.debug && (
                   <>
-                    <div className="result-item">
-                      <strong>Processed image:</strong>
-                      <img
-                        className="result-image"
-                        src={item.debug.processed_image}
-                        alt="Processed"
-                      />
-                    </div>
-                    {item.debug.hog_image && (
+                    {item.debug.processed_image && (
                       <div className="result-item">
-                        <strong>HOG image:</strong>
+                        <strong>Processed image:</strong>
                         <img
                           className="result-image"
-                          src={item.debug.hog_image}
-                          alt="HOG"
+                          src={item.debug.processed_image}
+                          alt="Processed"
                         />
                       </div>
                     )}
-                    <div className="result-item">
-                      <strong>HOG vector:</strong>
-                      <pre className="hog-output">{JSON.stringify(item.debug.hog, null, 2)}</pre>
-                    </div>
+                    {item.debug.image_predictions && (
+                      <pre className="debug-output">
+                        {JSON.stringify(item.debug.image_predictions, null, 2)}
+                      </pre>
+                    )}
                   </>
                 )}
               </div>

@@ -1,55 +1,58 @@
 import base64
-from typing import Any
-
-from ..schemas.inference_schema import ForwardImageResponse, DebugPayload, PredictionResponse
-from ml.hog_predictor import HogPredictor
-from ml.preprocessing import resize_with_padding_cv2, enhance_brightness_cv2
-from ml.hog import compute_hog_with_visualization
-from fastapi import UploadFile
-import cv2
-from .request_logging_service import RequestLoggingService
-import numpy as np
-import time
 import logging
+import time
+from collections import OrderedDict
+from functools import wraps
+from io import BytesIO
+
+import numpy as np
+from fastapi import UploadFile
+from PIL import Image
+
+from ml.dino_predictor import DinoImagePrediction, DinoMlflowPredictor
+
+from ..schemas.inference_schema import DebugImagePrediction, DebugPayload, ForwardImageResponse, PredictionResponse
+from .request_logging_service import RequestLoggingService
 
 logger = logging.getLogger(__name__)
 
+
 def measure_inference_time_decorator(func):
-    def wrapper(self: 'InferenceService', *args, **kwargs):
-            start_time = time.time()
-            status = 'Успех!'
-            result = None
-            try:
-                result = func(self, *args, **kwargs)
-            except Exception as e:
-                status = f'Ошибка {e}!'
-                raise e
-            finally:
-                end_time = time.time()
-                duration_ms = (end_time - start_time) * 1000
-                result_value = None
-                if result is not None:
-                    if hasattr(result, "prediction"):
-                        result_value = str(getattr(result, "prediction"))
-                    else:
-                        result_value = "Нет предсказания"
+    @wraps(func)
+    def wrapper(self: "InferenceService", *args, **kwargs):
+        start_time = time.time()
+        status = "Успех!"
+        result = None
+        try:
+            result = func(self, *args, **kwargs)
+        except Exception as exc:
+            status = f"Ошибка {exc}!"
+            raise
+        finally:
+            duration_ms = (time.time() - start_time) * 1000
+            result_value = self._prediction_log_value(result)
+            input_meta = self._prediction_log_meta(func.__name__, result)
+            if self.request_logging_service is not None:
                 self.request_logging_service.add_inference_request(
-                    input_meta=f"Вызов {func.__name__}",
+                    input_meta=input_meta,
                     image_width=self.stat_image_width,
                     image_height=self.stat_image_height,
                     duration=duration_ms,
                     result=result_value,
                     status=status,
                 )
+        return result
 
-            return result
     return wrapper
 
+
 class InferenceService:
-    def __init__(self, predictor_multiple: HogPredictor, predictor_single: HogPredictor, as_gray=True, request_logging_service: RequestLoggingService = None):
-        self.as_gray = as_gray
-        self.predictor_multiple = predictor_multiple
-        self.predictor_single = predictor_single
+    def __init__(
+        self,
+        predictor: DinoMlflowPredictor,
+        request_logging_service: RequestLoggingService | None = None,
+    ):
+        self.predictor = predictor
         self.request_logging_service = request_logging_service
 
         # для сервисов истории и статистики запросов
@@ -57,30 +60,27 @@ class InferenceService:
         self.stat_image_width = None
 
     @measure_inference_time_decorator
-    def predict_single(self, upload: UploadFile, debug: bool = False) -> ForwardImageResponse:
-        image = self._read_upload_cv2_gray(upload)
-        hog_vector, processed_image, hog_image = self._preprocess_study([image], return_image=True)
-        prediction_value, confidence = self.predictor_single.predict_with_confidence(hog_vector, is_multiple=False)
+    def predict_single(self, upload: UploadFile, *, anatomy: str, debug: bool = False) -> ForwardImageResponse:
+        payload = self._read_upload_bytes(upload)
+        image_prediction = self.predictor.predict_images([payload], [anatomy], [upload.filename])[0]
 
-        if processed_image is None:
-            raise ValueError("Processed image not available")
-
-        response: ForwardImageResponse = ForwardImageResponse(
-            filename=upload.filename,
-            prediction=prediction_value.item(),
-            confidence=confidence.item(),
-            image_base64=self._encode_image_base64(image),
-        )
-
-        self.stat_image_height, self.stat_image_width = image.shape[:2]
+        width, height = image_prediction.original_size
+        self.stat_image_height = height
+        self.stat_image_width = width
         logger.debug("Image shape for stats: %sx%s", self.stat_image_height, self.stat_image_width)
 
+        response = ForwardImageResponse(
+            filename=upload.filename,
+            anatomy=image_prediction.anatomy,
+            prediction=image_prediction.prediction,
+            probability=image_prediction.probability,
+            confidence=image_prediction.confidence,
+            threshold=image_prediction.threshold,
+            image_base64=self._encode_pil_image_base64(image_prediction.original_image),
+        )
+
         if debug:
-            response.debug = DebugPayload(
-                hog=hog_vector.tolist(),
-                processed_image=self._encode_image_base64(processed_image),
-                hog_image=self._encode_hog_image_base64(hog_image) if hog_image is not None else None,
-            )
+            response.debug = self._build_debug_payload([image_prediction])
 
         return response
 
@@ -90,132 +90,132 @@ class InferenceService:
         input_data: list[UploadFile],
         *,
         study_ids: list[str],
+        anatomies: list[str],
         debug: bool = False,
     ) -> list[PredictionResponse]:
-        studies: dict[str, list[UploadFile]] = {}
-        study_order: list[str] = []
-        for upload, study_id in zip(input_data, study_ids, strict=True):
-            if study_id not in studies:
-                studies[study_id] = []
-                study_order.append(study_id)
-            studies[study_id].append(upload)
-        hog_vectors_studies: list[np.ndarray] = []
-        processed_images_studies: list[np.ndarray | None] = []
-        hog_images_studies: list[np.ndarray | None] = []
+        if len(input_data) != len(study_ids) or len(input_data) != len(anatomies):
+            raise ValueError("Images, study IDs and anatomies counts must match")
+
+        payloads = [self._read_upload_bytes(upload) for upload in input_data]
+        filenames = [upload.filename for upload in input_data]
+        image_predictions = self.predictor.predict_images(payloads, anatomies, filenames)
+        self._set_average_stat_size(image_predictions)
+
+        studies: OrderedDict[str, list[DinoImagePrediction]] = OrderedDict()
+        for study_id, image_prediction in zip(study_ids, image_predictions, strict=True):
+            studies.setdefault(study_id, []).append(image_prediction)
+
         results: list[PredictionResponse] = []
-        image_sizes: list[tuple[int, int]] = []
-        for study_id in study_order:
-            uploads = studies[study_id]
-            images: list[np.ndarray] = []
-            filenames: list[str] = []
-            for upload in uploads:
-                images.append(self._read_upload_cv2_gray(upload))
-                image_sizes.append(images[-1].shape[:2])
-                if upload.filename:
-                    filenames.append(upload.filename)
+        for study_id, predictions in studies.items():
+            study_anatomies = {prediction.anatomy for prediction in predictions}
+            if len(study_anatomies) != 1:
+                raise ValueError(f"Study {study_id} contains multiple anatomy values: {sorted(study_anatomies)}")
 
-            hog_vector, processed_image, hog_image = self._preprocess_study(images, return_image=debug)
-            hog_vectors_studies.append(hog_vector)
-            processed_images_studies.append(processed_image)
-            hog_images_studies.append(hog_image)
-        avg_height, avg_width = int(np.mean([size[0] for size in image_sizes])), int(np.mean([size[1] for size in image_sizes]))
-        logger.debug("Average processed image size across studies: %sx%s", avg_height, avg_width)
-        self.stat_image_height = avg_height
-        self.stat_image_width = avg_width
-
-        prediction, confidence = self.predictor_multiple.predict_with_confidence(np.array(hog_vectors_studies), is_multiple=True)
-        for idx, study_id in enumerate(study_order):
-            hog_vector = hog_vectors_studies[idx]
-            processed_image = processed_images_studies[idx]
-            logger.debug("len processed images studies %s", np.array(processed_images_studies).shape)
-            logger.debug("hog vector shape %s", np.array(hog_vectors_studies).shape)
-            hog_image = hog_images_studies[idx]
-            filenames = [upload.filename for upload in studies[study_id] if upload.filename]
-            prediction_value = prediction[idx]
-            confidence_value = confidence[idx]
-            results.append(
-                self._postprocess(
-                    prediction_value,
-                    confidence=confidence_value,
-                    study_id=study_id,
-                    filenames=filenames,
-                    debug=debug,
-                    hog_vector=hog_vector,
-                    processed_image=processed_image,
-                    hog_image=hog_image,
-                )
+            probability = float(np.mean([prediction.probability for prediction in predictions]))
+            threshold = predictions[0].threshold
+            prediction_value = int(probability >= threshold)
+            confidence = probability if prediction_value == 1 else 1.0 - probability
+            response = PredictionResponse(
+                study_id=study_id,
+                anatomy=predictions[0].anatomy,
+                filenames=[prediction.filename for prediction in predictions if prediction.filename],
+                n_images=len(predictions),
+                prediction=prediction_value,
+                probability=probability,
+                confidence=confidence,
+                threshold=threshold,
             )
+
+            if debug:
+                response.debug = self._build_debug_payload(predictions)
+
+            results.append(response)
+
         return results
-    
-    def _read_upload_cv2_gray(self, upload: UploadFile) -> np.ndarray:
+
+    def _read_upload_bytes(self, upload: UploadFile) -> bytes:
         data = upload.file.read()
-        arr = np.frombuffer(data, np.uint8)
-        img = cv2.imdecode(arr, cv2.IMREAD_GRAYSCALE)
+        if not data:
+            raise ValueError("Uploaded image is empty")
+        return data
 
-        if img is None:
-            raise ValueError("Cannot decode image")
+    def _set_average_stat_size(self, predictions: list[DinoImagePrediction]) -> None:
+        if not predictions:
+            self.stat_image_height = None
+            self.stat_image_width = None
+            return
+        heights = [prediction.original_size[1] for prediction in predictions]
+        widths = [prediction.original_size[0] for prediction in predictions]
+        self.stat_image_height = int(np.mean(heights))
+        self.stat_image_width = int(np.mean(widths))
+        logger.debug("Average uploaded image size: %sx%s", self.stat_image_height, self.stat_image_width)
 
-        return img
-
-    def _preprocess_study(
-        self,
-        images: list[np.ndarray],
-        *,
-        return_image: bool = False,
-    ) -> tuple[np.ndarray, np.ndarray | None, np.ndarray | None]:
-        processed_images: list[np.ndarray] = []
-        for image in images:
-            enhanced = enhance_brightness_cv2(image)
-            resized = resize_with_padding_cv2(enhanced)
-            processed_images.append(resized)
-            logger.debug("Processed image shape: %s", resized.shape)
-
-        hog_vector, hog_image = compute_hog_with_visualization(np.array(processed_images))
-        if return_image:
-            return hog_vector, processed_images[0], hog_image
-        return hog_vector, None, None
-
-    def _encode_image_base64(self, image: np.ndarray) -> str:
-        success, buffer = cv2.imencode(".png", image)
-        if not success:
-            raise ValueError("Cannot encode image to PNG")
-        b64 = base64.b64encode(buffer).decode("ascii")
-        return f"data:image/png;base64,{b64}"
-
-    def _encode_hog_image_base64(self, hog_image: np.ndarray) -> str:
-        hog_u8 = cv2.normalize(hog_image, None, 0, 255, cv2.NORM_MINMAX)
-        return self._encode_image_base64(hog_u8)
-
-    def _normalize_prediction(self, predictions: np.ndarray) -> Any:
-        return predictions.item() if predictions.size == 1 else predictions.tolist()
-
-    def _postprocess(
-        self,
-        predictions: np.ndarray,
-        *,
-        confidence: float | None,
-        study_id: str,
-        filenames: list[str],
-        debug: bool,
-        hog_vector: np.ndarray,
-        processed_image: np.ndarray | None,
-        hog_image: np.ndarray | None,
-    ) -> PredictionResponse:
-        prediction_value = self._normalize_prediction(predictions)
-
-        response: PredictionResponse = PredictionResponse(
-            study_id=study_id,
-            filenames=filenames,
-            prediction=prediction_value,
-            confidence=confidence,
+    def _build_debug_payload(self, predictions: list[DinoImagePrediction]) -> DebugPayload:
+        first_prediction = predictions[0]
+        return DebugPayload(
+            processed_image=self._encode_pil_image_base64(first_prediction.processed_image),
+            image_predictions=[
+                DebugImagePrediction(
+                    filename=prediction.filename,
+                    anatomy=prediction.anatomy,
+                    probability=prediction.probability,
+                    prediction=prediction.prediction,
+                    confidence=prediction.confidence,
+                    threshold=prediction.threshold,
+                    processed_image=self._encode_pil_image_base64(prediction.processed_image),
+                )
+                for prediction in predictions
+            ],
         )
 
-        if debug:
-            if processed_image is None:
-                raise ValueError("Debug image requested but not available")
-            response.debug = DebugPayload(
-                hog=hog_vector.tolist(),
-                processed_image=self._encode_image_base64(processed_image),
-                hog_image=self._encode_hog_image_base64(hog_image) if hog_image is not None else None,
-            )
-        return response
+    def _encode_pil_image_base64(self, image: Image.Image) -> str:
+        buffer = BytesIO()
+        image.save(buffer, format="PNG")
+        b64 = base64.b64encode(buffer.getvalue()).decode("ascii")
+        return f"data:image/png;base64,{b64}"
+
+    def _prediction_log_value(self, result) -> str | None:
+        if result is None:
+            return None
+        if isinstance(result, list):
+            return "; ".join(self._format_prediction_log_item(item) for item in result) or "Нет предсказания"
+        prediction = self._get_log_field(result, "prediction")
+        if prediction is not None:
+            probability = self._get_log_field(result, "probability")
+            if probability is not None:
+                return f"{prediction} (p={float(probability):.4f})"
+            return str(prediction)
+        return "Нет предсказания"
+
+    def _prediction_log_meta(self, func_name: str, result) -> str:
+        if isinstance(result, list):
+            studies_count = len(result)
+            images_count = sum(int(self._get_log_field(item, "n_images") or 0) for item in result)
+            return f"Вызов {func_name}: studies={studies_count}, images={images_count}"
+        return f"Вызов {func_name}"
+
+    def _format_prediction_log_item(self, item) -> str:
+        study_id = self._get_log_field(item, "study_id")
+        prediction = self._get_log_field(item, "prediction")
+        probability = self._get_log_field(item, "probability")
+        anatomy = self._get_log_field(item, "anatomy")
+        n_images = self._get_log_field(item, "n_images")
+
+        parts = []
+        if study_id is not None:
+            parts.append(f"{study_id}")
+        if prediction is not None:
+            parts.append(f"pred={prediction}")
+        if probability is not None:
+            parts.append(f"p={float(probability):.4f}")
+        if anatomy is not None:
+            parts.append(f"anatomy={anatomy}")
+        if n_images is not None:
+            parts.append(f"images={n_images}")
+
+        return " ".join(parts) if parts else "Нет предсказания"
+
+    def _get_log_field(self, item, field: str):
+        if isinstance(item, dict):
+            return item.get(field)
+        return getattr(item, field, None)
