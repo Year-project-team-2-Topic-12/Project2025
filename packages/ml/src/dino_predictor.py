@@ -10,6 +10,10 @@ from typing import Sequence
 from dotenv import load_dotenv
 from PIL import Image
 
+#Для препроцессинга
+import numpy as np
+from .preprocessing import enhance_brightness_cv2
+
 logger = logging.getLogger(__name__)
 
 
@@ -282,10 +286,16 @@ class DinoMlflowPredictor:
         processed_images: list[Image.Image] = []
         tensors = []
         for payload in image_payloads:
-            image = self._decode_image(payload)
+            original_image = self._decode_image(payload)
+            
+            # Применяем CLAHE для усиления контраста рентгеновского снимка
+            image_np = np.array(original_image)
+            image_clahe = enhance_brightness_cv2(image_np)
+            image = Image.fromarray(image_clahe)
+            
             processed_image = self.pad_resize(image)
             tensor = self.normalize(self.to_tensor(processed_image))
-            original_images.append(image)
+            original_images.append(original_image)
             processed_images.append(processed_image)
             tensors.append(tensor)
 
