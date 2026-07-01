@@ -453,6 +453,19 @@ ensure_infra_env() {
   return 1
 }
 
+ensure_root_env() {
+  if [[ -f "${ROOT_DIR}/.env" ]]; then
+    return 0
+  fi
+  if [[ -f "${ROOT_DIR}/.env.example" ]]; then
+    echo "▶ Creating ${ROOT_DIR}/.env from .env.example"
+    cp "${ROOT_DIR}/.env.example" "${ROOT_DIR}/.env"
+    return 0
+  fi
+  echo "✖ ${ROOT_DIR}/.env not found and no .env.example to copy"
+  return 1
+}
+
 check_infra_prereqs() {
   if ! has_dir "${INFRA_DIR}"; then
     echo "✖ infra dir not found at: ${INFRA_DIR}"
@@ -1534,6 +1547,7 @@ dashboard_loop() {
 }
 
 ensure_bootstrap_state
+ensure_root_env || true
 trap 'dashboard_cleanup' EXIT
 trap 'dashboard_cleanup; exit 130' INT TERM
 dashboard_loop

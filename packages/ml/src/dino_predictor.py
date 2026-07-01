@@ -152,7 +152,7 @@ class DinoPredictorConfig:
             default_threshold=float(os.getenv("MURA_DINO_DEFAULT_THRESHOLD", "0.5")),
             threshold_override=threshold_override,
             batch_size=int(os.getenv("MURA_DINO_BATCH_SIZE", "16")),
-            device=os.getenv("MURA_DINO_DEVICE", "cpu"),
+            device=os.getenv("MURA_DINO_DEVICE", "auto"),
         )
 
     def resolved_model_uri(self) -> str:
