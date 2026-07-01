@@ -614,8 +614,8 @@ render_logs_menu() {
   fast_window_border "${width}"
   fast_window_title "Service logs" "${width}"
   fast_window_border "${width}"
-  fast_window_line "Up/Down or j/k: move    Enter/Space: view    q/Esc/b: back" "${width}"
-  fast_window_line "Tail: last ${tail_lines} lines    Dir: ${BOOTSTRAP_LOG_DIR}" "${width}"
+  fast_window_line "Up/Down or j/k: move    Enter/Space: follow (live)    q/Esc/b: back" "${width}"
+  fast_window_line "Live tail: last ${tail_lines} lines; Esc/q or Ctrl+C to stop    Dir: ${BOOTSTRAP_LOG_DIR}" "${width}"
   fast_window_border "${width}"
 
   for i in "${!LOGS_MENU_OPTIONS[@]}"; do
@@ -642,19 +642,46 @@ logs_show_tail() {
   local tail_lines="$1"
   shift
   local files=("$@")
+  local tail_pid key rest
 
   # Drop back to the normal screen (with scrollback) to show the log
   dashboard_leave_screen
   printf '\033[H\033[J'
   if [[ "${#files[@]}" -eq 1 ]]; then
-    echo "▶ ${files[0]} (last ${tail_lines} lines)"
+    echo "▶ ${files[0]} (live — last ${tail_lines} lines; Esc/q or Ctrl+C to stop)"
   else
-    echo "▶ All logs (last ${tail_lines} lines each)"
+    echo "▶ All logs (live — last ${tail_lines} lines each; Esc/q or Ctrl+C to stop)"
   fi
   echo
-  tail -n "${tail_lines}" "${files[@]}"
-  echo
-  pause
+
+  # Follow the log(s) in real time. tail runs in the background so we can watch
+  # the keyboard for Esc/q while it streams. Ctrl+C is caught locally so it stops
+  # only the tail and returns to the menu instead of killing the whole script
+  # (the global INT trap would otherwise exit bootstrap).
+  tail -n "${tail_lines}" -F "${files[@]}" &
+  tail_pid=$!
+  trap 'kill "${tail_pid}" 2>/dev/null || true' INT
+
+  # Poll the keyboard without echo so a single Esc/q returns to the logs menu.
+  stty -icanon -echo min 0 time 0 2>/dev/null || true
+  while kill -0 "${tail_pid}" 2>/dev/null; do
+    if IFS= read -rsN1 -t 0.2 key; then
+      if [[ "${key}" == "q" || "${key}" == "Q" ]]; then
+        break
+      fi
+      if [[ "${key}" == $'\e' ]]; then
+        # Distinguish a bare Esc from an escape sequence (arrow keys send \e[A).
+        rest=""
+        IFS= read -rsN2 -t 0.01 rest 2>/dev/null || true
+        [[ -z "${rest}" ]] && break
+      fi
+    fi
+  done
+
+  kill "${tail_pid}" 2>/dev/null || true
+  wait "${tail_pid}" 2>/dev/null || true
+  trap 'dashboard_cleanup; exit 130' INT
+
   dashboard_enter_screen
 }
 
