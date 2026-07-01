@@ -1,4 +1,7 @@
 # DL experiments по MURA
+
+> 🧭 [README](README.md) · **Чекпойнт 6 — Deep Learning** · ← [CP5 · ML-эксперименты](ML_Experiments.ipynb) · [CP7 · MLflow](MLflow_Checkpoint_MURA.md) →
+
 - [DL experiments по MURA](#dl-experiments-по-mura)
   - [Общее описание экспериментов и юпитер-тетрадок](#общее-описание-экспериментов-и-юпитер-тетрадок)
   - [Custom CNN Baseline (C3 / C5 / C5Res)](#custom-cnn-baseline-c3--c5--c5res)
@@ -86,8 +89,8 @@ XR_HAND         | 0.300  | 0.277  | 0.282  |
 XR_HUMERUS      | 0.062  | 0.453  | 0.257  |
 XR_SHOULDER     | 0.066  | 0.236  | 0.306  |
 XR_WRIST        | 0.268  | 0.467  | 0.385  |
-![alt text](image.png)
-![alt text](image-1.png)
+![CNN baseline — результаты по анатомиям](./doc.files/dl_experiments/cnn_baseline_1.png)
+![CNN baseline — сравнение архитектур](./doc.files/dl_experiments/cnn_baseline_2.png)
 ### Вывод 
 Использование даже неглубоких сверток дает сильные результаты в сравнении с ML-подходами и дает лучшие метрики. Несмотря на то, что даже тут можно еще использовать аугментации, нарастить глубину для улучшения результатов, разумно продолжить эксперименты с предобученными моделями для достижения лучшего результата.
 

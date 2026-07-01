@@ -10,6 +10,7 @@ BOOTSTRAP_LOG_DIR="${BOOTSTRAP_STATE_DIR}/logs"
 
 SERVICE_DIR="${ROOT_DIR}/service"
 FRONTEND_DIR="${ROOT_DIR}/frontend"
+INFRA_DIR="${ROOT_DIR}/infra/mlflow"
 
 BACKEND_MODULE="backend.main:app"
 BACKEND_HOST="0.0.0.0"
@@ -174,6 +175,182 @@ publish_models_to_wandb() {
     uv_run python "${ROOT_DIR}/scripts/publish_models_to_wandb.py" --models-dir "${ROOT_DIR}/models"
 }
 
+download_best_model() {
+  install_python_base >/dev/null
+
+  local dest="${MODEL_DOWNLOAD_DIR:-${ROOT_DIR}/models/mlflow}"
+  echo "▶ Downloading best MURA model from the MLflow registry"
+  echo "  Model + tracking URI are taken from .env (MLFLOW_MODEL_NAME/VERSION/ALIAS)"
+  echo "  Destination: ${dest}"
+  mkdir -p "${dest}"
+
+  run_and_wait_in_dir "${ROOT_DIR}" \
+    uv_run python -c '
+import os
+import sys
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+import mlflow
+from mlflow.artifacts import download_artifacts
+
+tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5050")
+model_name = os.getenv("MLFLOW_MODEL_NAME", "mura_dinov2_transformer")
+model_version = os.getenv("MLFLOW_MODEL_VERSION", "").strip()
+model_alias = os.getenv("MLFLOW_MODEL_ALIAS", "prd")
+model_uri = os.getenv("MLFLOW_MODEL_URI", "").strip()
+
+if not model_uri:
+    if model_version:
+        model_uri = f"models:/{model_name}/{model_version}"
+    else:
+        model_uri = f"models:/{model_name}@{model_alias}"
+
+dest = sys.argv[1]
+
+mlflow.set_tracking_uri(tracking_uri)
+print(f"Resolving {model_uri} from {tracking_uri}")
+local_path = download_artifacts(artifact_uri=model_uri, dst_path=dest)
+print(f"Model artifacts downloaded to: {local_path}")
+' "${dest}"
+}
+
+upload_model_to_mlflow() {
+  install_python_base >/dev/null
+
+  local src="${MODEL_UPLOAD_PATH:-}"
+  if [[ -z "${src}" ]]; then
+    read -r -p "Path to model file (.pt/.pth) or MLflow model dir: " src
+  fi
+  if [[ -z "${src}" ]]; then
+    echo "✖ No path provided"
+    return 1
+  fi
+  if [[ ! -e "${src}" ]]; then
+    echo "✖ Path not found: ${src}"
+    return 1
+  fi
+
+  echo "▶ Registering model into MLflow from: ${src}"
+  echo "  Registry name + alias are taken from .env (MLFLOW_MODEL_NAME/MLFLOW_MODEL_ALIAS)"
+
+  # The MLflow server writes run artifacts straight to MinIO (s3://), so the
+  # client needs S3 credentials + endpoint. Pull them from the infra .env
+  # unless the caller already exported their own.
+  local s3_port minio_user minio_pass
+  s3_port="$(infra_env_value S3_API_PORT 9900)"
+  minio_user="$(infra_env_value MINIO_ROOT_USER admin)"
+  minio_pass="$(infra_env_value MINIO_ROOT_PASSWORD password)"
+
+  (
+    export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-${minio_user}}"
+    export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-${minio_pass}}"
+    export MLFLOW_S3_ENDPOINT_URL="${MLFLOW_S3_ENDPOINT_URL:-http://localhost:${s3_port}}"
+    echo "  S3 endpoint: ${MLFLOW_S3_ENDPOINT_URL}"
+
+  run_and_wait_in_dir "${ROOT_DIR}" \
+    uv_run python -c '
+import os
+import sys
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+import mlflow
+from mlflow.tracking import MlflowClient
+
+tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5050")
+model_name = os.getenv("MLFLOW_MODEL_NAME", "mura_dinov2_transformer")
+model_alias = os.getenv("MLFLOW_MODEL_ALIAS", "prd")
+
+src = sys.argv[1]
+src_label = os.path.basename(src.rstrip("/"))
+mlflow.set_tracking_uri(tracking_uri)
+mlflow.set_experiment(model_name + "_uploads")
+
+pip_requirements = [
+    "torch",
+    "torchvision",
+    "transformers",
+    "mlflow>=2.15.1,<3",
+    "numpy",
+    "pandas",
+    "pillow",
+    "scikit-learn",
+]
+
+
+def is_mlflow_model_dir(path):
+    return os.path.isdir(path) and os.path.exists(os.path.join(path, "MLmodel"))
+
+
+version = ""
+if is_mlflow_model_dir(src):
+    # Already an MLflow-packaged model: copy the artifacts as-is and register a
+    # new version. We deliberately do NOT re-pickle the model object here -
+    # the notebook classifier class lives in __main__ and cloudpickle tries to
+    # serialize it by value, which crashes on Python 3.13 (dis IndexError).
+    print("Detected MLflow model directory; registering without re-pickling")
+    with mlflow.start_run(run_name="upload_" + src_label) as run:
+        mlflow.set_tag("uploaded_from", src)
+        mlflow.log_artifacts(src, artifact_path="model")
+        run_id = run.info.run_id
+    result = mlflow.register_model(model_uri="runs:/" + run_id + "/model", name=model_name)
+    version = str(result.version)
+else:
+    # Raw torch object saved via torch.save(model, path). This path re-pickles
+    # through mlflow.pytorch and may fail for notebook-defined classes.
+    import torch
+    import torch.nn as nn
+
+    # Make the notebook-pickled classifier importable as __main__.MuraDinoClassifier
+    try:
+        import ml.dino_predictor as dino_predictor
+        sys.modules["__main__"].MuraDinoClassifier = dino_predictor.MuraDinoClassifier
+    except Exception as exc:
+        print("warning: could not register pickle alias:", exc)
+
+    print("Loading torch-saved model object from file")
+    try:
+        model = torch.load(src, map_location="cpu", weights_only=False)
+    except TypeError:
+        model = torch.load(src, map_location="cpu")
+
+    if not isinstance(model, nn.Module):
+        raise SystemExit(
+            "Provided file is not a full torch model (got %s). "
+            "Save the whole model via torch.save(model, path), or pass an MLflow model dir."
+            % type(model).__name__
+        )
+
+    model.eval()
+    with mlflow.start_run(run_name="upload_" + src_label):
+        mlflow.set_tag("uploaded_from", src)
+        info = mlflow.pytorch.log_model(
+            model,
+            artifact_path="model",
+            registered_model_name=model_name,
+            pip_requirements=pip_requirements,
+        )
+    version = str(getattr(info, "registered_model_version", "") or "")
+
+client = MlflowClient()
+if version:
+    client.set_model_version_tag(model_name, version, "env", "PRD")
+    client.set_model_version_tag(model_name, version, "uploaded_from", src_label)
+    client.set_registered_model_alias(model_name, model_alias, version)
+    print("Registered model:", model_name, "version:", version, "alias:", model_alias)
+    print("Note: backend resolves MLFLOW_MODEL_VERSION first; set it to", version,
+          "or clear it to use the alias", model_alias)
+else:
+    print("Model logged but no registered version was returned")
+' "${src}"
+  )
+}
+
 run_frontend() {
   if ! has_dir "${FRONTEND_DIR}"; then
     echo "✖ frontend/ not found at: ${FRONTEND_DIR}"
@@ -238,6 +415,97 @@ generate_postman_collection() {
   echo "✔ Postman collection generated"
 }
 
+# ---------- infra (MLflow stack) ----------
+docker_compose() {
+  # Prefer docker compose (v2); fall back to docker-compose (v1)
+  if docker compose version >/dev/null 2>&1; then
+    docker compose "$@"
+  elif has_cmd docker-compose; then
+    docker-compose "$@"
+  else
+    echo "✖ docker compose (v2) or docker-compose (v1) is required" >&2
+    return 127
+  fi
+}
+
+infra_compose() {
+  ( cd "${INFRA_DIR}" && docker_compose "$@" )
+}
+
+infra_env_value() {
+  local key="$1" default="$2" file="${INFRA_DIR}/.env" value=""
+  if [[ -f "${file}" ]]; then
+    value="$(grep -E "^${key}=" "${file}" | tail -n1 | cut -d= -f2- | tr -d '\r')"
+  fi
+  echo "${value:-${default}}"
+}
+
+ensure_infra_env() {
+  if [[ -f "${INFRA_DIR}/.env" ]]; then
+    return 0
+  fi
+  if [[ -f "${INFRA_DIR}/.env.example" ]]; then
+    echo "▶ Creating ${INFRA_DIR}/.env from .env.example"
+    cp "${INFRA_DIR}/.env.example" "${INFRA_DIR}/.env"
+    return 0
+  fi
+  echo "✖ ${INFRA_DIR}/.env not found and no .env.example to copy"
+  return 1
+}
+
+ensure_root_env() {
+  if [[ -f "${ROOT_DIR}/.env" ]]; then
+    return 0
+  fi
+  if [[ -f "${ROOT_DIR}/.env.example" ]]; then
+    echo "▶ Creating ${ROOT_DIR}/.env from .env.example"
+    cp "${ROOT_DIR}/.env.example" "${ROOT_DIR}/.env"
+    return 0
+  fi
+  echo "✖ ${ROOT_DIR}/.env not found and no .env.example to copy"
+  return 1
+}
+
+check_infra_prereqs() {
+  if ! has_dir "${INFRA_DIR}"; then
+    echo "✖ infra dir not found at: ${INFRA_DIR}"
+    return 1
+  fi
+  if ! has_cmd docker; then
+    echo "✖ docker is not installed (needed to run the MLflow infra)"
+    return 1
+  fi
+}
+
+run_infra_up() {
+  check_infra_prereqs || return 1
+  ensure_infra_env || return 1
+
+  echo "▶ Starting MLflow infra (docker compose up -d) in ${INFRA_DIR}"
+  if ! infra_compose up -d; then
+    echo "✖ Failed to start MLflow infra"
+    return 1
+  fi
+
+  local mlflow_port minio_ui_port
+  mlflow_port="$(infra_env_value MLFLOW_PORT 5050)"
+  minio_ui_port="$(infra_env_value S3_UI_PORT 9001)"
+  echo "✔ MLflow infra started"
+  echo "  MLflow UI:     http://localhost:${mlflow_port}"
+  echo "  MinIO console: http://localhost:${minio_ui_port}"
+}
+
+run_infra_down() {
+  check_infra_prereqs || return 1
+
+  echo "▶ Stopping MLflow infra (docker compose down) in ${INFRA_DIR}"
+  if ! infra_compose down; then
+    echo "✖ Failed to stop MLflow infra"
+    return 1
+  fi
+  echo "✔ MLflow infra stopped"
+}
+
 install_all() {
   echo "▶ Installing all dependencies (python + frontend)..."
 
@@ -285,6 +553,205 @@ status_info() {
   fi
 }
 
+# ---------- logs viewer (interactive, like the main menu) ----------
+LOGS_MENU_OPTIONS=()
+LOGS_MENU_SELECTED=0
+LOGS_MENU_RESULT=""
+
+logs_menu_up() {
+  local size="$1"
+  if [[ "${LOGS_MENU_SELECTED}" -le 0 ]]; then
+    LOGS_MENU_SELECTED=$((size - 1))
+  else
+    LOGS_MENU_SELECTED=$((LOGS_MENU_SELECTED - 1))
+  fi
+}
+
+logs_menu_down() {
+  local size="$1"
+  if [[ "${LOGS_MENU_SELECTED}" -ge $((size - 1)) ]]; then
+    LOGS_MENU_SELECTED=0
+  else
+    LOGS_MENU_SELECTED=$((LOGS_MENU_SELECTED + 1))
+  fi
+}
+
+logs_menu_handle_input() {
+  local input="$1" size="$2" key
+  LOGS_MENU_RESULT=""
+
+  while [[ -n "${input}" ]]; do
+    if [[ "${input}" == $'\e[A'* ]]; then
+      logs_menu_up "${size}"; input="${input:3}"; continue
+    fi
+    if [[ "${input}" == $'\e[B'* ]]; then
+      logs_menu_down "${size}"; input="${input:3}"; continue
+    fi
+    if [[ "${input}" == $'\e[C'* || "${input}" == $'\e[D'* ]]; then
+      input="${input:3}"; continue
+    fi
+
+    key="${input:0:1}"
+    input="${input:1}"
+
+    case "${key}" in
+      "k"|"K") logs_menu_up "${size}" ;;
+      "j"|"J") logs_menu_down "${size}" ;;
+      $'\n'|$'\r'|" ") LOGS_MENU_RESULT="select"; return 0 ;;
+      "q"|"Q"|"b"|"B"|$'\e') LOGS_MENU_RESULT="back"; return 0 ;;
+    esac
+  done
+}
+
+render_logs_menu() {
+  local tail_lines="$1"
+  local width i marker label f
+
+  width="$(tput cols 2>/dev/null || echo 80)"
+  (( width < 80 )) && width=80
+
+  FRAME=$'\033[H'
+  fast_window_border "${width}"
+  fast_window_title "Service logs" "${width}"
+  fast_window_border "${width}"
+  fast_window_line "Up/Down or j/k: move    Enter/Space: follow (live)    q/Esc/b: back" "${width}"
+  fast_window_line "Live tail: last ${tail_lines} lines; Esc/q or Ctrl+C to stop    Dir: ${BOOTSTRAP_LOG_DIR}" "${width}"
+  fast_window_border "${width}"
+
+  for i in "${!LOGS_MENU_OPTIONS[@]}"; do
+    if [[ "${LOGS_MENU_OPTIONS[$i]}" == "all" ]]; then
+      label="all logs (backend/frontend/jupyter/mlflow)"
+    else
+      f="$(managed_log_file "${LOGS_MENU_OPTIONS[$i]}")"
+      label="$(printf '%-9s %s' "${LOGS_MENU_OPTIONS[$i]}" "${f}")"
+    fi
+    if [[ "${i}" -eq "${LOGS_MENU_SELECTED}" ]]; then
+      marker="> [*]"
+    else
+      marker="  [ ]"
+    fi
+    fast_window_line "${marker} ${label}" "${width}"
+  done
+  fast_window_border "${width}"
+  FRAME+=$'\033[J'
+
+  printf '%s' "${FRAME}"
+}
+
+logs_show_tail() {
+  local tail_lines="$1"
+  shift
+  local files=("$@")
+  local tail_pid key rest
+
+  # Drop back to the normal screen (with scrollback) to show the log
+  dashboard_leave_screen
+  printf '\033[H\033[J'
+  if [[ "${#files[@]}" -eq 1 ]]; then
+    echo "▶ ${files[0]} (live — last ${tail_lines} lines; Esc/q or Ctrl+C to stop)"
+  else
+    echo "▶ All logs (live — last ${tail_lines} lines each; Esc/q or Ctrl+C to stop)"
+  fi
+  echo
+
+  # Follow the log(s) in real time. tail runs in the background so we can watch
+  # the keyboard for Esc/q while it streams. Ctrl+C is caught locally so it stops
+  # only the tail and returns to the menu instead of killing the whole script
+  # (the global INT trap would otherwise exit bootstrap).
+  tail -n "${tail_lines}" -F "${files[@]}" &
+  tail_pid=$!
+  trap 'kill "${tail_pid}" 2>/dev/null || true' INT
+
+  # Poll the keyboard without echo so a single Esc/q returns to the logs menu.
+  stty -icanon -echo min 0 time 0 2>/dev/null || true
+  while kill -0 "${tail_pid}" 2>/dev/null; do
+    if IFS= read -rsN1 -t 0.2 key; then
+      if [[ "${key}" == "q" || "${key}" == "Q" ]]; then
+        break
+      fi
+      if [[ "${key}" == $'\e' ]]; then
+        # Distinguish a bare Esc from an escape sequence (arrow keys send \e[A).
+        rest=""
+        IFS= read -rsN2 -t 0.01 rest 2>/dev/null || true
+        [[ -z "${rest}" ]] && break
+      fi
+    fi
+  done
+
+  kill "${tail_pid}" 2>/dev/null || true
+  wait "${tail_pid}" 2>/dev/null || true
+  trap 'dashboard_cleanup; exit 130' INT
+
+  dashboard_enter_screen
+}
+
+logs_show_message() {
+  dashboard_leave_screen
+  printf '\033[H\033[J'
+  local line
+  for line in "$@"; do
+    echo "${line}"
+  done
+  echo
+  pause
+  dashboard_enter_screen
+}
+
+view_logs() {
+  ensure_bootstrap_state
+  local tail_lines="${LOG_TAIL_LINES:-200}"
+  local names=() name f dirty choice
+  local files=()
+
+  for name in backend frontend jupyter mlflow; do
+    f="$(managed_log_file "${name}")"
+    [[ -f "${f}" ]] && names+=("${name}")
+  done
+
+  if [[ "${#names[@]}" -eq 0 ]]; then
+    logs_show_message \
+      "No log files yet in ${BOOTSTRAP_LOG_DIR}" \
+      "Start a service (backend/frontend/jupyter/mlflow) to generate logs."
+    DASH_MESSAGE="View logs: no logs yet"
+    return 0
+  fi
+
+  LOGS_MENU_OPTIONS=("${names[@]}" "all")
+  LOGS_MENU_SELECTED=0
+  dirty=1
+
+  while true; do
+    if [[ "${dirty}" -eq 1 ]]; then
+      render_logs_menu "${tail_lines}"
+      dirty=0
+    fi
+
+    if read_dashboard_input; then
+      logs_menu_handle_input "${DASH_INPUT}" "${#LOGS_MENU_OPTIONS[@]}"
+      case "${LOGS_MENU_RESULT}" in
+        select)
+          choice="${LOGS_MENU_OPTIONS[$LOGS_MENU_SELECTED]}"
+          files=()
+          if [[ "${choice}" == "all" ]]; then
+            for name in "${names[@]}"; do
+              files+=("$(managed_log_file "${name}")")
+            done
+          else
+            files+=("$(managed_log_file "${choice}")")
+          fi
+          logs_show_tail "${tail_lines}" "${files[@]}"
+          ;;
+        back)
+          break
+          ;;
+      esac
+      dirty=1
+    fi
+  done
+
+  DASH_MESSAGE="View logs: closed"
+}
+
 clean_deps() {
   echo "⚠️  This will remove dependency artifacts:"
   echo "   - Python venv (.venv)"
@@ -321,6 +788,8 @@ MENU_ACTIONS=(
   "toggle_jupyter"
   "start_all_services"
   "stop_all_services"
+  "infra_up"
+  "infra_down"
   "uv_setup"
   "install_base"
   "install_notebooks"
@@ -332,8 +801,11 @@ MENU_ACTIONS=(
   "generate_postman_collection"
   "show_tree"
   "status_info"
+  "view_logs"
   "clean_deps"
   "publish_models_to_wandb"
+  "download_best_model"
+  "upload_model_to_mlflow"
   "exit"
 )
 
@@ -346,7 +818,9 @@ JUPYTER_ACTIVE=0
 BACKEND_STATUS_TEXT="..."
 FRONTEND_STATUS_TEXT="..."
 JUPYTER_STATUS_TEXT="..."
+INFRA_STATUS_TEXT="..."
 VENV_STATUS_TEXT="..."
+INFRA_MLFLOW_PORT="5050"
 DASHBOARD_SCREEN_ACTIVE=0
 
 ensure_bootstrap_state() {
@@ -464,6 +938,8 @@ refresh_service_status_cache() {
   BACKEND_STATUS_TEXT="$(service_status backend ":${BACKEND_PORT}")"
   FRONTEND_STATUS_TEXT="$(service_status frontend ":${FRONTEND_PORT}")"
   JUPYTER_STATUS_TEXT="$(service_status jupyter ":${JUPYTER_PORT}")"
+  INFRA_MLFLOW_PORT="$(infra_env_value MLFLOW_PORT 5050)"
+  INFRA_STATUS_TEXT="$(infra_status "${INFRA_MLFLOW_PORT}")"
   VENV_STATUS_TEXT="$(venv_status)"
 
   [[ "${BACKEND_STATUS_TEXT}" == RUN* ]] && BACKEND_ACTIVE=1 || BACKEND_ACTIVE=0
@@ -487,6 +963,15 @@ venv_status() {
     echo "BROKEN"
   else
     echo "MISSING"
+  fi
+}
+
+infra_status() {
+  local port="$1"
+  if [[ -n "${port}" ]] && port_listening "${port}"; then
+    echo "RUN :${port}"
+  else
+    echo "STOP"
   fi
 }
 
@@ -640,15 +1125,55 @@ toggle_managed_service() {
   esac
 }
 
+start_infra_managed() {
+  ensure_bootstrap_state
+  if ! has_dir "${INFRA_DIR}"; then
+    DASH_MESSAGE="mlflow: infra dir not found"
+    return 0
+  fi
+  if ! has_cmd docker; then
+    DASH_MESSAGE="mlflow: docker is not installed"
+    return 0
+  fi
+
+  (
+    set -euo pipefail
+    trap '' HUP
+    run_infra_up
+  ) >"$(managed_log_file mlflow)" 2>&1 < /dev/null &
+
+  local pid=$!
+  disown "${pid}" >/dev/null 2>&1 || true
+  DASH_MESSAGE="mlflow: starting, log $(managed_log_file mlflow)"
+}
+
+stop_infra_managed() {
+  if ! has_dir "${INFRA_DIR}" || ! has_cmd docker; then
+    DASH_MESSAGE="mlflow: already stopped"
+    return 0
+  fi
+
+  (
+    set -euo pipefail
+    trap '' HUP
+    run_infra_down
+  ) >"$(managed_log_file mlflow)" 2>&1 < /dev/null &
+
+  local pid=$!
+  disown "${pid}" >/dev/null 2>&1 || true
+  DASH_MESSAGE="mlflow: stopping, log $(managed_log_file mlflow)"
+}
+
 start_all_managed_services() {
   start_backend_managed
   start_frontend_managed
   start_jupyter_managed
-  DASH_MESSAGE="backend/frontend/jupyter: start requested"
+  start_infra_managed
+  DASH_MESSAGE="backend/frontend/jupyter/mlflow: start requested"
 }
 
 stop_all_managed_services() {
-  local backend_msg frontend_msg jupyter_msg
+  local backend_msg frontend_msg jupyter_msg mlflow_msg
 
   stop_managed_service "backend"
   backend_msg="${DASH_MESSAGE}"
@@ -656,37 +1181,44 @@ stop_all_managed_services() {
   frontend_msg="${DASH_MESSAGE}"
   stop_managed_service "jupyter"
   jupyter_msg="${DASH_MESSAGE}"
-  DASH_MESSAGE="stop all: ${backend_msg}; ${frontend_msg}; ${jupyter_msg}"
+  stop_infra_managed
+  mlflow_msg="${DASH_MESSAGE}"
+  DASH_MESSAGE="stop all: ${backend_msg}; ${frontend_msg}; ${jupyter_msg}; ${mlflow_msg}"
 }
 
 menu_label() {
   local action="$1"
   case "${action}" in
     toggle_backend)
-      cached_service_running "backend" && echo "Stop backend (${BACKEND_URL}, port ${BACKEND_PORT})" || echo "Start backend (${BACKEND_URL}, port ${BACKEND_PORT})"
+      cached_service_running "backend" && echo "🚀 Stop backend (${BACKEND_URL}, port ${BACKEND_PORT})" || echo "🚀 Start backend (${BACKEND_URL}, port ${BACKEND_PORT})"
       ;;
     toggle_frontend)
-      cached_service_running "frontend" && echo "Stop frontend (${FRONTEND_URL})" || echo "Start frontend (${FRONTEND_URL})"
+      cached_service_running "frontend" && echo "🎨 Stop frontend (${FRONTEND_URL})" || echo "🎨 Start frontend (${FRONTEND_URL})"
       ;;
     toggle_jupyter)
-      cached_service_running "jupyter" && echo "Stop JupyterLab (${JUPYTER_URL})" || echo "Start JupyterLab (${JUPYTER_URL})"
+      cached_service_running "jupyter" && echo "📓 Stop JupyterLab (${JUPYTER_URL})" || echo "📓 Start JupyterLab (${JUPYTER_URL})"
       ;;
-    start_all_services) echo "Start backend + frontend + JupyterLab" ;;
-    stop_all_services) echo "Stop backend + frontend + JupyterLab" ;;
-    uv_setup) echo "Setup venv (uv venv)" ;;
-    install_base) echo "Install python deps (editable)" ;;
-    install_notebooks) echo "Install python notebook extras" ;;
-    install_dev) echo "Install python dev extras" ;;
-    install_all) echo "Install ALL deps (python + frontend)" ;;
-    alembic_upgrade) echo "Alembic upgrade head" ;;
-    alembic_revision) echo "Alembic revision --autogenerate" ;;
-    generate_openapi_client) echo "Generate OpenAPI client (frontend)" ;;
-    generate_postman_collection) echo "Generate Postman collection" ;;
-    show_tree) echo "Show tree (filtered)" ;;
-    status_info) echo "Status details" ;;
-    clean_deps) echo "Clean dependencies (venv/build/node_modules)" ;;
-    publish_models_to_wandb) echo "Publish models to W&B" ;;
-    exit) echo "Exit menu (services keep running)" ;;
+    start_all_services) echo "🟢 Start backend + frontend + JupyterLab + MLflow" ;;
+    stop_all_services) echo "🔴 Stop backend + frontend + JupyterLab + MLflow" ;;
+    infra_up) echo "🐳 Start MLflow infra (docker compose up -d)" ;;
+    infra_down) echo "⛔ Stop MLflow infra (docker compose down)" ;;
+    uv_setup) echo "🐍 Setup venv (uv venv)" ;;
+    install_base) echo "📦 Install python deps (editable)" ;;
+    install_notebooks) echo "📚 Install python notebook extras" ;;
+    install_dev) echo "🔧 Install python dev extras" ;;
+    install_all) echo "🧰 Install ALL deps (python + frontend)" ;;
+    alembic_upgrade) echo "🆙 Alembic upgrade head" ;;
+    alembic_revision) echo "📝 Alembic revision --autogenerate" ;;
+    generate_openapi_client) echo "🔗 Generate OpenAPI client (frontend)" ;;
+    generate_postman_collection) echo "📮 Generate Postman collection" ;;
+    show_tree) echo "🌳 Show tree (filtered)" ;;
+    status_info) echo "📊 Status details" ;;
+    view_logs) echo "📜 View service logs (backend/frontend/jupyter/mlflow)" ;;
+    clean_deps) echo "🧹 Clean dependencies (venv/build/node_modules)" ;;
+    publish_models_to_wandb) echo "📤 Publish models to W&B" ;;
+    download_best_model) echo "📥 Download best model from MLflow" ;;
+    upload_model_to_mlflow) echo "📌 Register model file in MLflow (env name+alias)" ;;
+    exit) echo "🚪 Exit menu (services keep running)" ;;
   esac
 }
 
@@ -752,6 +1284,8 @@ run_selected_menu_action() {
     toggle_jupyter) toggle_managed_service "jupyter" ;;
     start_all_services) start_all_managed_services ;;
     stop_all_services) stop_all_managed_services ;;
+    infra_up) dashboard_run_blocking "Start MLflow infra" run_infra_up ;;
+    infra_down) dashboard_run_blocking "Stop MLflow infra" run_infra_down ;;
     uv_setup) dashboard_run_blocking "Setup venv" uv_in_venv ;;
     install_base) dashboard_run_blocking "Install python deps" install_python_base ;;
     install_notebooks) dashboard_run_blocking "Install python notebook extras" install_python_notebooks ;;
@@ -763,8 +1297,11 @@ run_selected_menu_action() {
     generate_postman_collection) dashboard_run_blocking "Generate Postman collection" generate_postman_collection ;;
     show_tree) dashboard_run_blocking "Show tree" show_tree ;;
     status_info) dashboard_run_blocking "Status details" status_info ;;
+    view_logs) view_logs ;;
     clean_deps) dashboard_run_blocking "Clean dependencies" clean_deps ;;
     publish_models_to_wandb) dashboard_run_blocking "Publish models to W&B" publish_models_to_wandb ;;
+    download_best_model) dashboard_run_blocking "Download best model" download_best_model ;;
+    upload_model_to_mlflow) dashboard_run_blocking "Register model in MLflow" upload_model_to_mlflow ;;
     exit) dashboard_exit ;;
   esac
   DASH_FORCE_STATUS_REFRESH=1
@@ -798,95 +1335,160 @@ handle_dashboard_input() {
   done
 }
 
+# Display width of a string in terminal columns. bash counts each code
+# point as 1, but wide emoji/CJK glyphs render as 2 columns and zero-width
+# combining marks / variation selectors / ZWJ render as 0 — which otherwise
+# breaks right-border alignment. Result is returned in the global STR_DW.
+str_display_width() {
+  local s="$1" len i code
+  local w=0
+  len="${#s}"
+  for (( i = 0; i < len; i++ )); do
+    printf -v code '%d' "'${s:i:1}"
+    if (( code == 0x200D || code == 0xFE0E || code == 0xFE0F \
+          || (code >= 0x0300 && code <= 0x036F) )); then
+      : # zero-width: ZWJ, variation selectors, combining marks
+    elif (( (code >= 0x1100 && code <= 0x115F) \
+          || (code >= 0x2600 && code <= 0x27BF) \
+          || (code >= 0x2B00 && code <= 0x2BFF) \
+          || (code >= 0x2E80 && code <= 0x303E) \
+          || (code >= 0x3041 && code <= 0x33FF) \
+          || (code >= 0x3400 && code <= 0x4DBF) \
+          || (code >= 0x4E00 && code <= 0x9FFF) \
+          || (code >= 0xA000 && code <= 0xA4CF) \
+          || (code >= 0xAC00 && code <= 0xD7A3) \
+          || (code >= 0xF900 && code <= 0xFAFF) \
+          || (code >= 0xFE30 && code <= 0xFE4F) \
+          || (code >= 0xFF00 && code <= 0xFF60) \
+          || (code >= 0xFFE0 && code <= 0xFFE6) \
+          || (code >= 0x1F000 && code <= 0x1FAFF) \
+          || (code >= 0x20000 && code <= 0x3FFFD) )); then
+      (( w += 2 )) # wide: emoji / fullwidth / CJK
+    else
+      (( w += 1 ))
+    fi
+  done
+  STR_DW="${w}"
+}
+
+# Frame buffer built up by the fast_window_* helpers below. Each helper appends
+# to FRAME using pure-bash string ops (no subshells, no external processes), so a
+# whole screen can be emitted in a SINGLE write. This is what keeps menu
+# navigation flicker-free instead of repainting the box line-by-line.
+FRAME=""
+FIT=""
+
+# Pad (or truncate) text to exactly `width` terminal columns, emoji-aware.
+# Result is placed in the global FIT (no stdout -> callers avoid a subshell).
 fit_text() {
   local text="$1" width="$2"
-  if (( ${#text} > width )); then
-    printf '%s' "${text:0:width}"
-  else
-    printf '%-*s' "${width}" "${text}"
-  fi
+  str_display_width "${text}"
+  while (( STR_DW > width )) && (( ${#text} > 0 )); do
+    text="${text:0:${#text}-1}"
+    str_display_width "${text}"
+  done
+  printf -v FIT '%s%*s' "${text}" "$(( width - STR_DW ))" ''
 }
 
 fast_window_line() {
-  local text="$1" width="$2"
-  printf '|%s|\n' "$(fit_text "${text}" "$((width - 2))")"
+  fit_text "$1" "$(( $2 - 2 ))"
+  FRAME+="|${FIT}|"$'\n'
 }
 
 fast_window_border() {
-  local width="$1"
-  printf '+'
-  printf '%*s' "$((width - 2))" '' | tr ' ' '-'
-  printf '+\n'
+  local width="$1" dashes
+  printf -v dashes '%*s' "$(( width - 2 ))" ''
+  FRAME+="+${dashes// /-}+"$'\n'
 }
 
 fast_window_title() {
-  local title="$1" width="$2" inner padding_left padding_right
-  inner=$((width - 2))
-  if (( ${#title} > inner )); then
-    title="${title:0:inner}"
-  fi
-  padding_left=$(((inner - ${#title}) / 2))
-  padding_right=$((inner - padding_left - ${#title}))
-  printf '|%*s%s%*s|\n' "${padding_left}" '' "${title}" "${padding_right}" ''
+  local title="$1" inner=$(( $2 - 2 )) padding_left padding_right line
+  str_display_width "${title}"
+  while (( STR_DW > inner )) && (( ${#title} > 0 )); do
+    title="${title:0:${#title}-1}"
+    str_display_width "${title}"
+  done
+  padding_left=$(( (inner - STR_DW) / 2 ))
+  padding_right=$(( inner - padding_left - STR_DW ))
+  printf -v line '|%*s%s%*s|' "${padding_left}" '' "${title}" "${padding_right}" ''
+  FRAME+="${line}"$'\n'
 }
 
 fast_status_row() {
-  printf '%-17.17s %-17.17s %-17.17s %-17.17s' "$1" "$2" "$3" "$4"
+  local width="$1"
+  shift
+  local out="" cell first=1 value
+  for value in "$@"; do
+    if (( first )); then
+      first=0
+    else
+      out+=" "
+    fi
+    printf -v cell '%-*.*s' "${width}" "${width}" "${value}"
+    out+="${cell}"
+  done
+  printf '%s' "${out}"
 }
 
 fast_dashboard_render() {
-  local width action label marker i selected line
+  local width action label marker i selected line status_colw
 
   width="$(tput cols 2>/dev/null || echo 80)"
   (( width < 80 )) && width=80
 
-  {
-    printf '\033[H'
+  status_colw=$(( (width - 6) / 5 ))
+  (( status_colw < 9 )) && status_colw=9
+  (( status_colw > 17 )) && status_colw=17
 
-    fast_window_border "${width}"
-    fast_window_title "Project2025 status" "${width}"
-    fast_window_border "${width}"
-    fast_window_line "$(fast_status_row "Backend" "UI" "Jupyter" "Venv")" "${width}"
-    fast_window_line "$(fast_status_row "${BACKEND_STATUS_TEXT}" "${FRONTEND_STATUS_TEXT}" "${JUPYTER_STATUS_TEXT}" "${VENV_STATUS_TEXT}")" "${width}"
-    fast_window_border "${width}"
-    fast_window_line "Backend API: ${BACKEND_URL}    port: ${BACKEND_PORT}" "${width}"
-    fast_window_line "Frontend UI: ${FRONTEND_URL}" "${width}"
-    fast_window_line "JupyterLab:  ${JUPYTER_URL}" "${width}"
-    fast_window_border "${width}"
+  FRAME=$'\033[H'
 
-    fast_window_border "${width}"
-    fast_window_title "Actions" "${width}"
-    fast_window_border "${width}"
-    fast_window_line "Up/Down or j/k: move    Enter/Space: run    q/Esc: exit" "${width}"
-    fast_window_border "${width}"
+  fast_window_border "${width}"
+  fast_window_title "Project2025 status" "${width}"
+  fast_window_border "${width}"
+  fast_window_line "$(fast_status_row "${status_colw}" "Backend" "UI" "Jupyter" "MLflow" "Venv")" "${width}"
+  fast_window_line "$(fast_status_row "${status_colw}" "${BACKEND_STATUS_TEXT}" "${FRONTEND_STATUS_TEXT}" "${JUPYTER_STATUS_TEXT}" "${INFRA_STATUS_TEXT}" "${VENV_STATUS_TEXT}")" "${width}"
+  fast_window_border "${width}"
+  fast_window_line "Backend API: ${BACKEND_URL}    port: ${BACKEND_PORT}" "${width}"
+  fast_window_line "Frontend UI: ${FRONTEND_URL}" "${width}"
+  fast_window_line "JupyterLab:  ${JUPYTER_URL}" "${width}"
+  fast_window_line "MLflow UI:   http://localhost:${INFRA_MLFLOW_PORT}" "${width}"
+  fast_window_border "${width}"
 
-    for i in "${!MENU_ACTIONS[@]}"; do
-      action="${MENU_ACTIONS[$i]}"
-      label="$(menu_label "${action}")"
-      if [[ "${i}" -eq "${MENU_SELECTED}" ]]; then
-        marker="> [*]"
-      else
-        marker="  [ ]"
-      fi
-      fast_window_line "${marker} ${label}" "${width}"
-    done
-    fast_window_border "${width}"
+  fast_window_border "${width}"
+  fast_window_title "Actions" "${width}"
+  fast_window_border "${width}"
+  fast_window_line "Up/Down or j/k: move    Enter/Space: run    q/Esc: exit" "${width}"
+  fast_window_border "${width}"
 
-    fast_window_border "${width}"
-    fast_window_title "Message" "${width}"
-    fast_window_border "${width}"
-    fast_window_line "${DASH_MESSAGE}" "${width}"
-    fast_window_line "Logs: ${BOOTSTRAP_LOG_DIR}/backend.log | frontend.log | jupyter.log" "${width}"
-    fast_window_border "${width}"
-    printf '\033[J'
-  }
+  for i in "${!MENU_ACTIONS[@]}"; do
+    action="${MENU_ACTIONS[$i]}"
+    label="$(menu_label "${action}")"
+    if [[ "${i}" -eq "${MENU_SELECTED}" ]]; then
+      marker="> [*]"
+    else
+      marker="  [ ]"
+    fi
+    fast_window_line "${marker} ${label}" "${width}"
+  done
+  fast_window_border "${width}"
+
+  fast_window_border "${width}"
+  fast_window_title "Message" "${width}"
+  fast_window_border "${width}"
+  fast_window_line "${DASH_MESSAGE}" "${width}"
+  fast_window_line "Logs: ${BOOTSTRAP_LOG_DIR}/backend.log | frontend.log | jupyter.log" "${width}"
+  fast_window_border "${width}"
+  FRAME+=$'\033[J'
+
+  printf '%s' "${FRAME}"
 }
 
 dashboard_status_snapshot() {
-  printf '%s|%s|%s|%s' \
+  printf '%s|%s|%s|%s|%s' \
     "${BACKEND_STATUS_TEXT}" \
     "${FRONTEND_STATUS_TEXT}" \
     "${JUPYTER_STATUS_TEXT}" \
+    "${INFRA_STATUS_TEXT}" \
     "${VENV_STATUS_TEXT}"
 }
 
@@ -972,6 +1574,7 @@ dashboard_loop() {
 }
 
 ensure_bootstrap_state
+ensure_root_env || true
 trap 'dashboard_cleanup' EXIT
 trap 'dashboard_cleanup; exit 130' INT TERM
 dashboard_loop

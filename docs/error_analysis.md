@@ -1,5 +1,7 @@
 # Анализ ошибок DINOv2 на MURA
 
+> 🧭 [README](../README.md) · [Чекпойнт 7 — MLflow](../MLflow_Checkpoint_MURA.md) · **Анализ ошибок**
+
 Модель: `facebook/dinov2-large`.
 
 Порог бинаризации выбран на internal validation по study-level предсказаниям: `0.480`.
