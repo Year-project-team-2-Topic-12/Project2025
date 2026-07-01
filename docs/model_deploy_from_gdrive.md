@@ -1,5 +1,7 @@
 # Деплой модели: Google Drive → локальный MLflow → бэкенд
 
+> 🧭 [README](../README.md) · [Чекпойнт 7 — MLflow](../MLflow_Checkpoint_MURA.md) · **Деплой модели с Google Drive**
+
 Гайд описывает, как забрать обученную модель с Google Drive, зарегистрировать её
 в локальном MLflow и переключить бэкенд на эту версию.
 

@@ -1,15 +1,61 @@
-# 🩺 Обработка и анализ медицинских изображений
-- [🩺 Обработка и анализ медицинских изображений](#%F0%9F%A9%BA-%D0%BE%D0%B1%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%BA%D0%B0-%D0%B8-%D0%B0%D0%BD%D0%B0%D0%BB%D0%B8%D0%B7-%D0%BC%D0%B5%D0%B4%D0%B8%D1%86%D0%B8%D0%BD%D1%81%D0%BA%D0%B8%D1%85-%D0%B8%D0%B7%D0%BE%D0%B1%D1%80%D0%B0%D0%B6%D0%B5%D0%BD%D0%B8%D0%B9)
-  - [📌 Итоговая тема проекта](#%F0%9F%93%8C-%D0%B8%D1%82%D0%BE%D0%B3%D0%BE%D0%B2%D0%B0%D1%8F-%D1%82%D0%B5%D0%BC%D0%B0-%D0%BF%D1%80%D0%BE%D0%B5%D0%BA%D1%82%D0%B0)
-  - [👥 Состав команды](#%F0%9F%91%A5-%D1%81%D0%BE%D1%81%D1%82%D0%B0%D0%B2-%D0%BA%D0%BE%D0%BC%D0%B0%D0%BD%D0%B4%D1%8B)
-  - [🎯 План работы](#%F0%9F%8E%AF-%D0%BF%D0%BB%D0%B0%D0%BD-%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D1%8B)
-  - [🔧 Технологии и инструменты](#%F0%9F%94%A7-%D1%82%D0%B5%D1%85%D0%BD%D0%BE%D0%BB%D0%BE%D0%B3%D0%B8%D0%B8-%D0%B8-%D0%B8%D0%BD%D1%81%D1%82%D1%80%D1%83%D0%BC%D0%B5%D0%BD%D1%82%D1%8B)
-  - [🔗 Полезные ссылки](#%F0%9F%94%97-%D0%BF%D0%BE%D0%BB%D0%B5%D0%B7%D0%BD%D1%8B%D0%B5-%D1%81%D1%81%D1%8B%D0%BB%D0%BA%D0%B8)
-  - [🔌 Инструкция по [локальному] запуску](#%F0%9F%94%8C-%D0%B8%D0%BD%D1%81%D1%82%D1%80%D1%83%D0%BA%D1%86%D0%B8%D1%8F-%D0%BF%D0%BE-%D0%BB%D0%BE%D0%BA%D0%B0%D0%BB%D1%8C%D0%BD%D0%BE%D0%BC%D1%83-%D0%B7%D0%B0%D0%BF%D1%83%D1%81%D0%BA%D1%83)
-  - [Postman коллекция](#postman-%D0%BA%D0%BE%D0%BB%D0%BB%D0%B5%D0%BA%D1%86%D0%B8%D1%8F)
+# 🩺 Обработка и анализ медицинских изображений (MURA)
 
-## 📌 Итоговая тема проекта
-Разработка и исследование алгоритмов классификации медицинских изображений, а также создание сервиса для обработки изображений и выдачи прогноза.
+Классификация рентгеновских снимков [MURA](https://stanfordmlgroup.github.io/competitions/mura/) на два класса — `normal` / `abnormal` — и веб-сервис, который принимает снимок и возвращает прогноз.
+
+Репозиторий устроен как **путешествие по чекпойнтам**: от первого разведочного анализа данных до сервиса с MLflow. Ниже — точка входа «запустить и поиграться», карта маршрута по чекпойнтам и карта документации.
+
+## 🚀 Быстрый старт: запустить и поиграться
+
+Хотите просто поднять сервис и покидать в него рентген-снимки — вам сюда.
+
+**Требования:** Linux, Python ≥ 3.13, Node.js ≥ 24, curl ≥ 8.
+
+1. Установить Python 3.13.7 (через [pyenv](https://github.com/pyenv/pyenv) | [pyenv-win](https://github.com/pyenv-win/pyenv-win)):
+   ```bash
+   pyenv install 3.13.7
+   pyenv shell 3.13.7
+   ```
+2. Поставить зависимости: запустить `./bootstrap.sh` — откроется интерактивное меню (навигация — стрелки `↑`/`↓` или `j`/`k`, запуск пункта — `Enter`/`Space`, выход — `q`/`Esc`). Выбрать пункт `🧰 Install ALL deps (python + frontend)`:
+   ```bash
+   ./bootstrap.sh
+   ```
+   ![Меню bootstrap.sh](doc.files/dev-menu.png)
+3. Создать базу данных (только при первом запуске) — пункт `🆙 Alembic upgrade head`.
+4. Запустить бэкенд — пункт `🚀 Start backend`.
+5. В **другом терминале** запустить фронтенд — пункт `🎨 Start frontend`.
+
+> 💡 Пункт `🟢 Start backend + frontend + JupyterLab + MLflow` поднимает все сервисы разом.
+
+Открыть в браузере:
+- 🌐 Фронтенд: <http://localhost:5173/>
+- 📄 API-документация (Swagger): <http://127.0.0.1:8000/docs>
+
+Полная инструкция (включая запуск ноутбуков) — в разделе «Полная инструкция по запуску» ниже. Как устроен сам сервис — в [README сервиса](service/README.md).
+
+## 🧭 Маршрут по чекпойнтам
+
+Проект развивался по чекпойнтам — каждый следующий строится на предыдущем. Читать удобно по порядку:
+
+| Чекпойнт | Этап | Что внутри | Открыть |
+|:---:|---|---|---|
+| **2** | 🔍 EDA | Первичный разведочный анализ: что за данные, пути, размеры снимков, распределения классов | [EDA.ipynb](EDA.ipynb) |
+| **3** | 🤖 Классические ML | Доработка EDA, препроцессинг и простые модели (HOG + PCA + линейные классификаторы, XGBoost) | [ML.ipynb](ML.ipynb) |
+| **4** | 🖥️ Сервис | FastAPI-бэкенд + React-фронтенд: загрузка снимков, инференс, история, статистика, авторизация | [service/README.md](service/README.md) |
+| **5** | 📈 ML-эксперименты | Попытки улучшить классические ML-модели | [ML_Experiments.ipynb](ML_Experiments.ipynb) |
+| **6** | 🧠 Deep Learning | CNN baseline, DenseNet121, ResNet50/101, DINOv2 — эксперименты и сравнение | [DL_Experiments.md](DL_Experiments.md) |
+| **7** | 🚀 MLflow | Финальная модель, воспроизводимый MLflow-стек, встраивание обучения в сервис | [MLflow_Checkpoint_MURA.md](MLflow_Checkpoint_MURA.md) |
+
+## 📚 Карта документации
+
+| Документ | О чём | Чекпойнт |
+|---|---|:---:|
+| [service/README.md](service/README.md) | Архитектура сервиса, эндпоинты, роли, запуск | 4 |
+| [DL_Experiments.md](DL_Experiments.md) | Эксперименты с глубоким обучением | 6 |
+| [MLflow_Checkpoint_MURA.md](MLflow_Checkpoint_MURA.md) | MLflow-чекпойнт и финальная модель | 7 |
+| [docs/error_analysis.md](docs/error_analysis.md) | Анализ ошибок финальной DINOv2-модели | 7 |
+| [docs/robustness_analysis.md](docs/robustness_analysis.md) | Проверка устойчивости к искажениям | 7 |
+| [docs/model_deploy_from_gdrive.md](docs/model_deploy_from_gdrive.md) | Деплой модели: Google Drive → MLflow → бэкенд | 7 |
+| [postman/](postman/) | Готовая Postman-коллекция для тестирования API | 4 |
 
 ---
 
@@ -59,35 +105,35 @@
 ---
 
 
-## 🔌 Инструкция по [локальному] запуску
-1. Установить [pyenv](https://github.com/pyenv/pyenv) | [pyenv-win](https://github.com/pyenv-win/pyenv-win)
-2. Чтобы установить зависимости:
-```bash
-  pyenv install 3.13.7
-  pyenv shell 3.13.7
-  ./bootstrap.sh
-```
-Для установки зависимостей выберите пункт
-`4) Install ALL deps (python + frontend)`
-![alt text](doc.files/dev-menu.png)
-3. Запуск кода
-   - jupyter:
-     1. VS code:
-        - Открыть ML.ipynb (если нужно)
-        - Выберите окружение из venv
-     2. Jupyter-notebook
-          - Запустите `./bootstrap.sh`
-          - Выберите 9
-     3. Google collab:
-          - На ваш страх и риск
-   - сервис:
-     - Запустите `./bootstrap.sh`
-     - [при первом запуске] выберите  `6) Alembic upgrade head`
-     - запустите бекенд - `5) Run backend (uvicorn --reload)`
-     - запустите `./bootstrap.sh` **в другом терминале**, выберите `8) Run frontend (Vite)`
-     - frontend: http://localhost:5173/
-     - backend: http://127.0.0.1:8000/docs
-## Сервис
-[Подробнее о сервисе и его устройстве можно прочитать в соответствующем README](service/README.md)
-## Postman коллекция
-папка `/postman` содержит коллекцию для тестирования бекенда. Пожалуйста, при добавлении новых эндпоинтов пополните её необходимыми реквестами
+## 🔌 Полная инструкция по запуску
+
+Подготовка окружения (один раз):
+
+1. Установить [pyenv](https://github.com/pyenv/pyenv) | [pyenv-win](https://github.com/pyenv-win/pyenv-win) и Python 3.13.7:
+   ```bash
+   pyenv install 3.13.7
+   pyenv shell 3.13.7
+   ```
+2. Запустить `./bootstrap.sh` и выбрать пункт `🧰 Install ALL deps (python + frontend)`. Навигация по меню — стрелки `↑`/`↓` или `j`/`k`, запуск пункта — `Enter`/`Space`.
+
+   ![Меню bootstrap.sh](doc.files/dev-menu.png)
+
+### 📓 Ноутбуки (чекпойнты 2, 3, 5)
+
+- **VS Code:** открыть нужный ноутбук ([EDA.ipynb](EDA.ipynb), [ML.ipynb](ML.ipynb), [ML_Experiments.ipynb](ML_Experiments.ipynb)) и выбрать окружение из `venv`.
+- **Jupyter:** запустить `./bootstrap.sh` и выбрать пункт `📓 Start JupyterLab`.
+- **Google Colab:** на ваш страх и риск.
+
+### 🖥️ Сервис (чекпойнт 4)
+
+Через `./bootstrap.sh`:
+
+- `🆙 Alembic upgrade head` — при первом запуске (создаёт базу данных);
+- `🚀 Start backend` — бэкенд, <http://127.0.0.1:8000/docs>;
+- `🎨 Start frontend` — фронтенд **в другом терминале**, <http://localhost:5173/>.
+
+Подробнее об устройстве сервиса, эндпоинтах и ролях — в [README сервиса](service/README.md).
+
+### 📮 Postman
+
+Папка [`postman/`](postman/) содержит коллекцию для тестирования бэкенда. При добавлении новых эндпоинтов, пожалуйста, пополняйте её соответствующими запросами.

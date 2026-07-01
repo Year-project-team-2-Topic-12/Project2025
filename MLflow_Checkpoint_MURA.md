@@ -1,5 +1,6 @@
 # MLflow checkpoint по MURA
 
+> 🧭 [README](README.md) · **Чекпойнт 7 — MLflow** · ← [CP6 · Deep Learning](DL_Experiments.md) · [Анализ ошибок](docs/error_analysis.md) · [Устойчивость](docs/robustness_analysis.md) →
 
 - [Общее описание checkpoint](#общее-описание-checkpoint)
 - [Финальная модель](#финальная-модель)

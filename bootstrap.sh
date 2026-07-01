@@ -597,32 +597,32 @@ render_logs_menu() {
   width="$(tput cols 2>/dev/null || echo 80)"
   (( width < 80 )) && width=80
 
-  {
-    printf '\033[H'
-    fast_window_border "${width}"
-    fast_window_title "Service logs" "${width}"
-    fast_window_border "${width}"
-    fast_window_line "Up/Down or j/k: move    Enter/Space: view    q/Esc/b: back" "${width}"
-    fast_window_line "Tail: last ${tail_lines} lines    Dir: ${BOOTSTRAP_LOG_DIR}" "${width}"
-    fast_window_border "${width}"
+  FRAME=$'\033[H'
+  fast_window_border "${width}"
+  fast_window_title "Service logs" "${width}"
+  fast_window_border "${width}"
+  fast_window_line "Up/Down or j/k: move    Enter/Space: view    q/Esc/b: back" "${width}"
+  fast_window_line "Tail: last ${tail_lines} lines    Dir: ${BOOTSTRAP_LOG_DIR}" "${width}"
+  fast_window_border "${width}"
 
-    for i in "${!LOGS_MENU_OPTIONS[@]}"; do
-      if [[ "${LOGS_MENU_OPTIONS[$i]}" == "all" ]]; then
-        label="all logs (backend/frontend/jupyter/mlflow)"
-      else
-        f="$(managed_log_file "${LOGS_MENU_OPTIONS[$i]}")"
-        label="$(printf '%-9s %s' "${LOGS_MENU_OPTIONS[$i]}" "${f}")"
-      fi
-      if [[ "${i}" -eq "${LOGS_MENU_SELECTED}" ]]; then
-        marker="> [*]"
-      else
-        marker="  [ ]"
-      fi
-      fast_window_line "${marker} ${label}" "${width}"
-    done
-    fast_window_border "${width}"
-    printf '\033[J'
-  }
+  for i in "${!LOGS_MENU_OPTIONS[@]}"; do
+    if [[ "${LOGS_MENU_OPTIONS[$i]}" == "all" ]]; then
+      label="all logs (backend/frontend/jupyter/mlflow)"
+    else
+      f="$(managed_log_file "${LOGS_MENU_OPTIONS[$i]}")"
+      label="$(printf '%-9s %s' "${LOGS_MENU_OPTIONS[$i]}" "${f}")"
+    fi
+    if [[ "${i}" -eq "${LOGS_MENU_SELECTED}" ]]; then
+      marker="> [*]"
+    else
+      marker="  [ ]"
+    fi
+    fast_window_line "${marker} ${label}" "${width}"
+  done
+  fast_window_border "${width}"
+  FRAME+=$'\033[J'
+
+  printf '%s' "${FRAME}"
 }
 
 logs_show_tail() {
@@ -1295,36 +1295,83 @@ handle_dashboard_input() {
   done
 }
 
+# Display width of a string in terminal columns. bash counts each code
+# point as 1, but wide emoji/CJK glyphs render as 2 columns and zero-width
+# combining marks / variation selectors / ZWJ render as 0 — which otherwise
+# breaks right-border alignment. Result is returned in the global STR_DW.
+str_display_width() {
+  local s="$1" len i code
+  local w=0
+  len="${#s}"
+  for (( i = 0; i < len; i++ )); do
+    printf -v code '%d' "'${s:i:1}"
+    if (( code == 0x200D || code == 0xFE0E || code == 0xFE0F \
+          || (code >= 0x0300 && code <= 0x036F) )); then
+      : # zero-width: ZWJ, variation selectors, combining marks
+    elif (( (code >= 0x1100 && code <= 0x115F) \
+          || (code >= 0x2600 && code <= 0x27BF) \
+          || (code >= 0x2B00 && code <= 0x2BFF) \
+          || (code >= 0x2E80 && code <= 0x303E) \
+          || (code >= 0x3041 && code <= 0x33FF) \
+          || (code >= 0x3400 && code <= 0x4DBF) \
+          || (code >= 0x4E00 && code <= 0x9FFF) \
+          || (code >= 0xA000 && code <= 0xA4CF) \
+          || (code >= 0xAC00 && code <= 0xD7A3) \
+          || (code >= 0xF900 && code <= 0xFAFF) \
+          || (code >= 0xFE30 && code <= 0xFE4F) \
+          || (code >= 0xFF00 && code <= 0xFF60) \
+          || (code >= 0xFFE0 && code <= 0xFFE6) \
+          || (code >= 0x1F000 && code <= 0x1FAFF) \
+          || (code >= 0x20000 && code <= 0x3FFFD) )); then
+      (( w += 2 )) # wide: emoji / fullwidth / CJK
+    else
+      (( w += 1 ))
+    fi
+  done
+  STR_DW="${w}"
+}
+
+# Frame buffer built up by the fast_window_* helpers below. Each helper appends
+# to FRAME using pure-bash string ops (no subshells, no external processes), so a
+# whole screen can be emitted in a SINGLE write. This is what keeps menu
+# navigation flicker-free instead of repainting the box line-by-line.
+FRAME=""
+FIT=""
+
+# Pad (or truncate) text to exactly `width` terminal columns, emoji-aware.
+# Result is placed in the global FIT (no stdout -> callers avoid a subshell).
 fit_text() {
   local text="$1" width="$2"
-  if (( ${#text} > width )); then
-    printf '%s' "${text:0:width}"
-  else
-    printf '%-*s' "${width}" "${text}"
-  fi
+  str_display_width "${text}"
+  while (( STR_DW > width )) && (( ${#text} > 0 )); do
+    text="${text:0:${#text}-1}"
+    str_display_width "${text}"
+  done
+  printf -v FIT '%s%*s' "${text}" "$(( width - STR_DW ))" ''
 }
 
 fast_window_line() {
-  local text="$1" width="$2"
-  printf '|%s|\n' "$(fit_text "${text}" "$((width - 2))")"
+  fit_text "$1" "$(( $2 - 2 ))"
+  FRAME+="|${FIT}|"$'\n'
 }
 
 fast_window_border() {
-  local width="$1"
-  printf '+'
-  printf '%*s' "$((width - 2))" '' | tr ' ' '-'
-  printf '+\n'
+  local width="$1" dashes
+  printf -v dashes '%*s' "$(( width - 2 ))" ''
+  FRAME+="+${dashes// /-}+"$'\n'
 }
 
 fast_window_title() {
-  local title="$1" width="$2" inner padding_left padding_right
-  inner=$((width - 2))
-  if (( ${#title} > inner )); then
-    title="${title:0:inner}"
-  fi
-  padding_left=$(((inner - ${#title}) / 2))
-  padding_right=$((inner - padding_left - ${#title}))
-  printf '|%*s%s%*s|\n' "${padding_left}" '' "${title}" "${padding_right}" ''
+  local title="$1" inner=$(( $2 - 2 )) padding_left padding_right line
+  str_display_width "${title}"
+  while (( STR_DW > inner )) && (( ${#title} > 0 )); do
+    title="${title:0:${#title}-1}"
+    str_display_width "${title}"
+  done
+  padding_left=$(( (inner - STR_DW) / 2 ))
+  padding_right=$(( inner - padding_left - STR_DW ))
+  printf -v line '|%*s%s%*s|' "${padding_left}" '' "${title}" "${padding_right}" ''
+  FRAME+="${line}"$'\n'
 }
 
 fast_status_row() {
@@ -1353,47 +1400,47 @@ fast_dashboard_render() {
   (( status_colw < 9 )) && status_colw=9
   (( status_colw > 17 )) && status_colw=17
 
-  {
-    printf '\033[H'
+  FRAME=$'\033[H'
 
-    fast_window_border "${width}"
-    fast_window_title "Project2025 status" "${width}"
-    fast_window_border "${width}"
-    fast_window_line "$(fast_status_row "${status_colw}" "Backend" "UI" "Jupyter" "MLflow" "Venv")" "${width}"
-    fast_window_line "$(fast_status_row "${status_colw}" "${BACKEND_STATUS_TEXT}" "${FRONTEND_STATUS_TEXT}" "${JUPYTER_STATUS_TEXT}" "${INFRA_STATUS_TEXT}" "${VENV_STATUS_TEXT}")" "${width}"
-    fast_window_border "${width}"
-    fast_window_line "Backend API: ${BACKEND_URL}    port: ${BACKEND_PORT}" "${width}"
-    fast_window_line "Frontend UI: ${FRONTEND_URL}" "${width}"
-    fast_window_line "JupyterLab:  ${JUPYTER_URL}" "${width}"
-    fast_window_line "MLflow UI:   http://localhost:${INFRA_MLFLOW_PORT}" "${width}"
-    fast_window_border "${width}"
+  fast_window_border "${width}"
+  fast_window_title "Project2025 status" "${width}"
+  fast_window_border "${width}"
+  fast_window_line "$(fast_status_row "${status_colw}" "Backend" "UI" "Jupyter" "MLflow" "Venv")" "${width}"
+  fast_window_line "$(fast_status_row "${status_colw}" "${BACKEND_STATUS_TEXT}" "${FRONTEND_STATUS_TEXT}" "${JUPYTER_STATUS_TEXT}" "${INFRA_STATUS_TEXT}" "${VENV_STATUS_TEXT}")" "${width}"
+  fast_window_border "${width}"
+  fast_window_line "Backend API: ${BACKEND_URL}    port: ${BACKEND_PORT}" "${width}"
+  fast_window_line "Frontend UI: ${FRONTEND_URL}" "${width}"
+  fast_window_line "JupyterLab:  ${JUPYTER_URL}" "${width}"
+  fast_window_line "MLflow UI:   http://localhost:${INFRA_MLFLOW_PORT}" "${width}"
+  fast_window_border "${width}"
 
-    fast_window_border "${width}"
-    fast_window_title "Actions" "${width}"
-    fast_window_border "${width}"
-    fast_window_line "Up/Down or j/k: move    Enter/Space: run    q/Esc: exit" "${width}"
-    fast_window_border "${width}"
+  fast_window_border "${width}"
+  fast_window_title "Actions" "${width}"
+  fast_window_border "${width}"
+  fast_window_line "Up/Down or j/k: move    Enter/Space: run    q/Esc: exit" "${width}"
+  fast_window_border "${width}"
 
-    for i in "${!MENU_ACTIONS[@]}"; do
-      action="${MENU_ACTIONS[$i]}"
-      label="$(menu_label "${action}")"
-      if [[ "${i}" -eq "${MENU_SELECTED}" ]]; then
-        marker="> [*]"
-      else
-        marker="  [ ]"
-      fi
-      fast_window_line "${marker} ${label}" "${width}"
-    done
-    fast_window_border "${width}"
+  for i in "${!MENU_ACTIONS[@]}"; do
+    action="${MENU_ACTIONS[$i]}"
+    label="$(menu_label "${action}")"
+    if [[ "${i}" -eq "${MENU_SELECTED}" ]]; then
+      marker="> [*]"
+    else
+      marker="  [ ]"
+    fi
+    fast_window_line "${marker} ${label}" "${width}"
+  done
+  fast_window_border "${width}"
 
-    fast_window_border "${width}"
-    fast_window_title "Message" "${width}"
-    fast_window_border "${width}"
-    fast_window_line "${DASH_MESSAGE}" "${width}"
-    fast_window_line "Logs: ${BOOTSTRAP_LOG_DIR}/backend.log | frontend.log | jupyter.log" "${width}"
-    fast_window_border "${width}"
-    printf '\033[J'
-  }
+  fast_window_border "${width}"
+  fast_window_title "Message" "${width}"
+  fast_window_border "${width}"
+  fast_window_line "${DASH_MESSAGE}" "${width}"
+  fast_window_line "Logs: ${BOOTSTRAP_LOG_DIR}/backend.log | frontend.log | jupyter.log" "${width}"
+  fast_window_border "${width}"
+  FRAME+=$'\033[J'
+
+  printf '%s' "${FRAME}"
 }
 
 dashboard_status_snapshot() {
